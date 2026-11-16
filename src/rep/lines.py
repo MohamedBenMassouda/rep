@@ -1,3 +1,4 @@
+import os
 import shlex
 import subprocess
 
@@ -9,7 +10,7 @@ def line_for(kind, pack, display, chooser):
     command_template = display.get("line_command", "")
 
     if command_template:
-        command = shlex.split(command_template.replace(KIND_PLACEHOLDER, kind))
+        command = [os.path.expanduser(part) for part in shlex.split(command_template.replace(KIND_PLACEHOLDER, kind))]
 
         try:
             custom = subprocess.run(command, capture_output=True, text=True, timeout=COMMAND_TIMEOUT_SECONDS).stdout.strip()
