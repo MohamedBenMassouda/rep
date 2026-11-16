@@ -43,6 +43,7 @@ class Pack:
     bosses: tuple
     test: tuple
     lines: dict
+    muscles: dict
 
     def ladders_in_group(self, group):
         return [ladder for ladder in self.ladders.values() if ladder.group == group]
@@ -109,6 +110,7 @@ def parse_pack(raw):
         bosses=tuple(raw.get("bosses", ())),
         test=tuple(raw.get("test", ())),
         lines={kind: tuple(lines) for kind, lines in raw.get("lines", {}).items()},
+        muscles=raw.get("muscles", {}),
     )
     validate_references(pack)
 
@@ -128,3 +130,9 @@ def validate_references(pack):
 
         if ladder.group not in pack.groups:
             raise PackError(f"ladder {ladder.identifier!r} is in unknown group {ladder.group!r}")
+
+    for muscle, weights in pack.muscles.items():
+        unknown_groups = sorted(group for group in weights if group not in pack.groups)
+
+        if unknown_groups:
+            raise PackError(f"muscle {muscle!r} is in unknown groups {', '.join(unknown_groups)}")

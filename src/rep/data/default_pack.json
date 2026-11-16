@@ -6,6 +6,76 @@
     "legs",
     "core"
   ],
+  "muscles": {
+    "chest": {
+      "push": 1
+    },
+    "shoulders": {
+      "push": 1
+    },
+    "front_delts": {
+      "push": 1
+    },
+    "triceps": {
+      "push": 1
+    },
+    "back": {
+      "pull": 2
+    },
+    "lats": {
+      "pull": 1
+    },
+    "biceps": {
+      "pull": 1
+    },
+    "rear_delts": {
+      "pull": 1
+    },
+    "traps": {
+      "pull": 1
+    },
+    "forearms": {
+      "pull": 1
+    },
+    "arms": {
+      "push": 1,
+      "pull": 1
+    },
+    "legs": {
+      "legs": 2
+    },
+    "quads": {
+      "legs": 1
+    },
+    "hamstrings": {
+      "legs": 1
+    },
+    "glutes": {
+      "legs": 1
+    },
+    "calves": {
+      "legs": 1
+    },
+    "core": {
+      "core": 2
+    },
+    "abs": {
+      "core": 1
+    },
+    "obliques": {
+      "core": 1
+    },
+    "upper_body": {
+      "push": 2,
+      "pull": 2
+    },
+    "full_body": {
+      "push": 1,
+      "pull": 1,
+      "legs": 1,
+      "core": 1
+    }
+  },
   "exercises": {
     "clap_push_up": {
       "name": "Clap push-ups",
