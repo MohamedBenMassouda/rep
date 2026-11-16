@@ -11,8 +11,9 @@ pull-up. You answer from the notification, and your targets move with you.
   pseudo-planche → one-arm. Reaching the top of a rung unlocks the next one.
 - **Answers that steer progression.** Done / Skip / Later, then "how many reps were left?":
   3+ left raises the target, three steady sets in a row raise it, failure keeps it.
-- **Your training days count.** Log a session (`rep session upper|legs|full`) and that day's
-  challenges skip those muscles and lean towards skill practice.
+- **Your training days count.** Describe your split once (`push: chest, shoulders, triceps`…),
+  log a day with `rep session push`, and that day's challenges skip those muscle groups, count
+  towards the weekly caps and lean towards skill practice.
 - **Max test.** A guided test places every ladder at the hardest movement you can do for real and
   sets targets from your numbers. A reminder comes every 6 weeks.
 - **Weekly boss challenge**, protein check-in, bedtime reminder and a daily summary with streaks.
@@ -38,7 +39,8 @@ and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE
 | Command | Does |
 |---|---|
 | `rep now` | a challenge right now |
-| `rep session upper\|legs\|full` | log a training session today |
+| `rep session DAY` | log one of your training days today (`upper`, `legs`, `full` without a routine) |
+| `rep routine [--names]` | your training days, their muscles and what they count as |
 | `rep stats [--history]` | targets, ladders, weekly caps; `--history` adds progress charts and compares max tests |
 | `rep test` / `rep test-window` | max test (in this terminal / in a new one) |
 | `rep today` | today's numbers as JSON, for widgets |
@@ -67,6 +69,22 @@ rep completion fish > ~/.config/fish/completions/rep.fish
 
 Re-run it after updating rep so new commands show up.
 
+## Your routine
+
+`rep init` asks for your training days, one per line as `name: muscles`:
+
+```
+push: chest, shoulders, triceps
+pull: back + biceps + rear delts
+legs: legs and core
+```
+
+Muscles are joined with `,`, `+` or `and`; spelling is loose (`bicep`, `rear delts`). Each muscle
+belongs to one or more groups of the pack (`chest` → push, `rear delts` → pull, `arms` → push
+and pull, `legs` and `back` count double). A logged day counts `sets_per_muscle` (3) hard sets
+per muscle against those groups' weekly caps and skips them for that day's challenges.
+`rep routine` shows what each day counts as. The muscle list lives in the pack under `muscles`.
+
 ## Configuration
 
 `~/.config/rep/config.toml` (written by `rep init`; edit freely):
@@ -75,7 +93,7 @@ Re-run it after updating rep so new commands show up.
 |---|---|
 | `[profile]` | `body_weight_kg`, `level` (beginner / intermediate / advanced), `skills` |
 | `[schedule]` | `start_hour`, `end_hour`, gap between challenges, `snooze_minutes`, `reminder_minutes` |
-| `[training]` | `weekly_caps`, `session_allowances`, skill share on training / rest days, boss settings, `streak_minimum`, `retest_days`, `pack_file` |
+| `[training]` | `routine`, `sets_per_muscle`, `weekly_caps`, `session_allowances` (used when there is no routine), skill share on training / rest days, boss settings, `streak_minimum`, `retest_days`, `pack_file` |
 | `[nudges]` | `protein`, `bedtime`, `summary` times (`HH:MM` or `off`) |
 | `[display]` | `notifier` (auto / quickshell / desktop / terminal), `quickshell_kind`, `line_command` |
 | `[conditions]` | `pause_files`, `check_microphone`, `check_screen_share` |

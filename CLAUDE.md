@@ -143,7 +143,12 @@ its state transition runs again from the top:
 - **The button argv is an interface.** Notifiers run `rep answer <token> done|skip|later`,
   `rep rate <token> 3|1|0`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
   through the hidden `rep await-notification <json>`.
-- **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained` and `skills`.
+- **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained`,
+  `sessions` (day name → muscles text) and `skills`.
+- **Session names are data too.** They come from `[training] routine` (else
+  `session_allowances`), are stored in `session` events, and `rep routine --names` feeds shell
+  completion for `rep session`. `App` replaces `session_allowances` with the routine's on load
+  (`routine.session_allowances()`), so everything downstream reads one table.
 - **Line kinds** passed to `line_command` and looked up in packs: `challenge`, `done`,
   `level_up`, `boss`, `protein`, `bedtime`.
 - **Event types:** `set`, `skip`, `session`, `test`. Counting code filters on `type`.
