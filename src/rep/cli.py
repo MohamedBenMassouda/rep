@@ -200,7 +200,9 @@ def main(argv=None):
         dispatch(default_paths(), arguments)
     except ConfigMissing as missing:
         print(missing, file=sys.stderr)
-        sys.exit(EXIT_PROBLEM)
+
+        if arguments.command != "tick":
+            sys.exit(EXIT_PROBLEM)
     except PackError as problem:
         print(f"Exercise pack problem: {problem}", file=sys.stderr)
         sys.exit(EXIT_PROBLEM)
