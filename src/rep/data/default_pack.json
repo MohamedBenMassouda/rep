@@ -1,0 +1,490 @@
+{
+  "name": "Calisthenics",
+  "groups": [
+    "push",
+    "pull",
+    "legs",
+    "core"
+  ],
+  "exercises": {
+    "clap_push_up": {
+      "name": "Clap push-ups",
+      "unit": "reps",
+      "start": 12,
+      "step": 1,
+      "top": 20,
+      "cue": "Explode off the floor, land soft with bent elbows."
+    },
+    "archer_push_up": {
+      "name": "Archer push-ups",
+      "unit": "reps_per_side",
+      "start": 8,
+      "step": 1,
+      "top": 15,
+      "cue": "Shift onto one arm, the other stays straight out."
+    },
+    "pseudo_planche_push_up": {
+      "name": "Pseudo-planche push-ups",
+      "unit": "reps",
+      "start": 10,
+      "step": 1,
+      "top": 20,
+      "cue": "Hands by the hips, lean well past the hands."
+    },
+    "one_arm_push_up": {
+      "name": "One-arm push-ups",
+      "unit": "reps_per_side",
+      "start": 5,
+      "step": 1,
+      "top": 12,
+      "cue": "Feet wide, hips square, chest to the fist."
+    },
+    "one_arm_push_up_tempo": {
+      "name": "One-arm push-ups, 4 s down",
+      "unit": "reps_per_side",
+      "start": 4,
+      "step": 1,
+      "top": 10,
+      "cue": "Four full seconds down, pause, drive up."
+    },
+    "dip": {
+      "name": "Dips",
+      "unit": "reps",
+      "start": 15,
+      "step": 1,
+      "top": 25,
+      "cue": "Shoulders down, 90° at the elbow, lock out."
+    },
+    "tempo_dip": {
+      "name": "Tempo dips (4 s down, 2 s pause)",
+      "unit": "reps",
+      "start": 8,
+      "step": 1,
+      "top": 15,
+      "cue": "Slow down, pause at the bottom, drive up."
+    },
+    "elevated_pike_push_up": {
+      "name": "Elevated pike push-ups",
+      "unit": "reps",
+      "start": 12,
+      "step": 1,
+      "top": 20,
+      "cue": "Feet on a chair, hips high, head to the floor."
+    },
+    "wall_handstand_push_up": {
+      "name": "Wall handstand push-ups",
+      "unit": "reps",
+      "start": 6,
+      "step": 1,
+      "top": 12,
+      "cue": "Head to a triangle with the hands, full lockout."
+    },
+    "deficit_handstand_push_up": {
+      "name": "Deficit wall handstand push-ups",
+      "unit": "reps",
+      "start": 4,
+      "step": 1,
+      "top": 10,
+      "cue": "Hands on books, lower the head below hand level."
+    },
+    "push_up_drop_set": {
+      "name": "Drop set: archer → diamond → regular push-ups",
+      "unit": "reps",
+      "start": 6,
+      "step": 1,
+      "top": 12,
+      "cue": "Reps per part, no rest between."
+    },
+    "chest_to_bar_pull_up": {
+      "name": "Chest-to-bar pull-ups",
+      "unit": "reps",
+      "start": 10,
+      "step": 1,
+      "top": 15,
+      "cue": "Pull the chest to the bar, elbows back."
+    },
+    "explosive_pull_up": {
+      "name": "Explosive high pull-ups",
+      "unit": "reps",
+      "start": 8,
+      "step": 1,
+      "top": 12,
+      "cue": "Pull as high as you can, hands leave the bar if you can."
+    },
+    "archer_pull_up": {
+      "name": "Archer pull-ups",
+      "unit": "reps_per_side",
+      "start": 5,
+      "step": 1,
+      "top": 8,
+      "cue": "Pull to one hand, the other arm straight along the bar."
+    },
+    "typewriter_pull_up": {
+      "name": "Typewriter pull-ups",
+      "unit": "reps_per_side",
+      "start": 4,
+      "step": 1,
+      "top": 8,
+      "cue": "Up, slide side to side at the top, down."
+    },
+    "muscle_up": {
+      "name": "Muscle-ups",
+      "unit": "reps",
+      "start": 5,
+      "step": 1,
+      "top": 10,
+      "cue": "False grip if you like, clean transition, no kipping."
+    },
+    "slow_muscle_up": {
+      "name": "Slow muscle-ups (3 s down)",
+      "unit": "reps",
+      "start": 3,
+      "step": 1,
+      "top": 6,
+      "cue": "Control the way down through the transition."
+    },
+    "tempo_chin_up": {
+      "name": "Chin-ups, 4 s down",
+      "unit": "reps",
+      "start": 8,
+      "step": 1,
+      "top": 12,
+      "cue": "Chest to the bar, four seconds down."
+    },
+    "l_sit_chin_up": {
+      "name": "L-sit chin-ups",
+      "unit": "reps",
+      "start": 6,
+      "step": 1,
+      "top": 12,
+      "cue": "Legs straight out the whole set."
+    },
+    "pull_up_drop_set": {
+      "name": "Drop set: archer → wide → regular pull-ups",
+      "unit": "reps",
+      "start": 4,
+      "step": 1,
+      "top": 8,
+      "cue": "Reps per part, no rest between."
+    },
+    "jump_squat": {
+      "name": "Jump squats",
+      "unit": "reps",
+      "start": 20,
+      "step": 2,
+      "top": 35,
+      "cue": "Land soft, straight into the next rep."
+    },
+    "shrimp_squat": {
+      "name": "Shrimp squats",
+      "unit": "reps_per_side",
+      "start": 6,
+      "step": 1,
+      "top": 12,
+      "cue": "Hold the back foot, knee to the floor."
+    },
+    "pistol_squat": {
+      "name": "Pistol squats",
+      "unit": "reps_per_side",
+      "start": 8,
+      "step": 1,
+      "top": 15,
+      "cue": "Heel down, arms forward, no bounce."
+    },
+    "tempo_pistol_squat": {
+      "name": "Pistol squats, 4 s down",
+      "unit": "reps_per_side",
+      "start": 5,
+      "step": 1,
+      "top": 10,
+      "cue": "Four seconds down, pause, up."
+    },
+    "bulgarian_split_squat": {
+      "name": "Bulgarian split squats, 3 s down",
+      "unit": "reps_per_side",
+      "start": 10,
+      "step": 1,
+      "top": 15,
+      "cue": "Back foot on a chair, upright torso."
+    },
+    "jumping_lunge": {
+      "name": "Jumping lunges",
+      "unit": "reps",
+      "start": 20,
+      "step": 2,
+      "top": 30,
+      "cue": "Switch legs in the air, soft landing."
+    },
+    "single_leg_calf_raise": {
+      "name": "Single-leg calf raises",
+      "unit": "reps_per_side",
+      "start": 20,
+      "step": 2,
+      "top": 35,
+      "cue": "Full stretch, pause at the top."
+    },
+    "hanging_leg_raise": {
+      "name": "Hanging leg raises",
+      "unit": "reps",
+      "start": 12,
+      "step": 1,
+      "top": 20,
+      "cue": "No swinging."
+    },
+    "toes_to_bar": {
+      "name": "Toes-to-bar",
+      "unit": "reps",
+      "start": 10,
+      "step": 1,
+      "top": 15,
+      "cue": "Toes touch the bar, controlled down."
+    },
+    "dragon_flag_negative": {
+      "name": "Dragon flag negatives",
+      "unit": "reps",
+      "start": 5,
+      "step": 1,
+      "top": 10,
+      "cue": "Straight body, lower slowly."
+    },
+    "hollow_body_hold": {
+      "name": "Hollow body hold",
+      "unit": "seconds",
+      "start": 60,
+      "step": 5,
+      "top": 120,
+      "cue": "Lower back glued to the floor."
+    },
+    "l_sit": {
+      "name": "L-sit",
+      "unit": "seconds",
+      "start": 20,
+      "step": 3,
+      "top": 45,
+      "cue": "Straight legs, shoulders pushed down."
+    },
+    "v_sit": {
+      "name": "V-sit attempts",
+      "unit": "seconds",
+      "start": 5,
+      "step": 1,
+      "top": 15,
+      "cue": "From the L-sit, lift the legs higher."
+    },
+    "chest_to_wall_handstand": {
+      "name": "Chest-to-wall handstand",
+      "unit": "seconds",
+      "start": 60,
+      "step": 5,
+      "top": 90,
+      "cue": "Belly to the wall, push the floor away, tight body."
+    },
+    "toe_pull_handstand": {
+      "name": "Toe-pull handstand holds",
+      "unit": "tries",
+      "start": 6,
+      "step": 1,
+      "top": 10,
+      "cue": "From the wall, pull the toes off and balance, 5-10 s each."
+    },
+    "free_kick_up": {
+      "name": "Free kick-up attempts",
+      "unit": "tries",
+      "start": 8,
+      "step": 1,
+      "top": 12,
+      "cue": "Kick up away from the wall, find balance, bail safely."
+    },
+    "free_handstand": {
+      "name": "Free-standing handstand",
+      "unit": "seconds",
+      "start": 10,
+      "step": 2,
+      "top": 60,
+      "cue": "Best of 5 tries. Fingers do the balancing."
+    },
+    "one_arm_pull_up_archer_practice": {
+      "name": "One-arm pull-up practice: archer pull-ups",
+      "unit": "reps_per_side",
+      "start": 3,
+      "step": 1,
+      "top": 6,
+      "cue": "Two sets, stop 2 reps before failure."
+    },
+    "one_arm_pull_up_typewriter_practice": {
+      "name": "One-arm pull-up practice: typewriters",
+      "unit": "reps_per_side",
+      "start": 3,
+      "step": 1,
+      "top": 6,
+      "cue": "Two sets, slow at the sides."
+    },
+    "towel_assisted_one_arm_pull_up": {
+      "name": "Towel-assisted one-arm pull-ups",
+      "unit": "reps_per_side",
+      "start": 3,
+      "step": 1,
+      "top": 6,
+      "cue": "Other hand on a towel low down, help as little as you can."
+    },
+    "one_arm_pull_up_negative": {
+      "name": "One-arm pull-up negatives (5 s)",
+      "unit": "reps_per_side",
+      "start": 3,
+      "step": 1,
+      "top": 6,
+      "cue": "Get to the top with both, lower on one arm for 5 s."
+    },
+    "one_arm_pull_up": {
+      "name": "One-arm pull-ups",
+      "unit": "reps_per_side",
+      "start": 1,
+      "step": 1,
+      "top": 5,
+      "cue": "Dead hang, pull with one arm, other hand free."
+    }
+  },
+  "ladders": {
+    "push": {
+      "dip": [
+        "dip",
+        "tempo_dip"
+      ],
+      "vertical": [
+        "elevated_pike_push_up",
+        "wall_handstand_push_up",
+        "deficit_handstand_push_up"
+      ],
+      "push_up": [
+        "clap_push_up",
+        "archer_push_up",
+        "pseudo_planche_push_up",
+        "one_arm_push_up",
+        "one_arm_push_up_tempo"
+      ],
+      "push_up_drop_set": [
+        "push_up_drop_set"
+      ]
+    },
+    "pull": {
+      "pull_up": [
+        "chest_to_bar_pull_up",
+        "explosive_pull_up",
+        "archer_pull_up",
+        "typewriter_pull_up"
+      ],
+      "muscle_up": [
+        "muscle_up",
+        "slow_muscle_up"
+      ],
+      "chin_up": [
+        "tempo_chin_up",
+        "l_sit_chin_up"
+      ],
+      "pull_up_drop_set": [
+        "pull_up_drop_set"
+      ]
+    },
+    "legs": {
+      "squat": [
+        "jump_squat",
+        "shrimp_squat",
+        "pistol_squat",
+        "tempo_pistol_squat"
+      ],
+      "split": [
+        "bulgarian_split_squat",
+        "jumping_lunge"
+      ],
+      "calf": [
+        "single_leg_calf_raise"
+      ]
+    },
+    "core": {
+      "hanging_core": [
+        "hanging_leg_raise",
+        "toes_to_bar",
+        "dragon_flag_negative"
+      ],
+      "floor_hold": [
+        "hollow_body_hold",
+        "l_sit",
+        "v_sit"
+      ]
+    }
+  },
+  "skills": {
+    "handstand": {
+      "title": "Handstand",
+      "ladder": [
+        "chest_to_wall_handstand",
+        "toe_pull_handstand",
+        "free_kick_up",
+        "free_handstand"
+      ]
+    },
+    "one_arm_pull_up": {
+      "title": "One-arm pull-up",
+      "ladder": [
+        "one_arm_pull_up_archer_practice",
+        "one_arm_pull_up_typewriter_practice",
+        "towel_assisted_one_arm_pull_up",
+        "one_arm_pull_up_negative",
+        "one_arm_pull_up"
+      ]
+    }
+  },
+  "bosses": [
+    "muscle_up",
+    "one_arm_push_up",
+    "chest_to_bar_pull_up",
+    "pistol_squat"
+  ],
+  "test": [
+    "clap_push_up",
+    "archer_push_up",
+    "one_arm_push_up",
+    "dip",
+    "wall_handstand_push_up",
+    "chest_to_bar_pull_up",
+    "archer_pull_up",
+    "muscle_up",
+    "pistol_squat",
+    "toes_to_bar",
+    "l_sit",
+    "chest_to_wall_handstand",
+    "free_handstand"
+  ],
+  "lines": {
+    "challenge": [
+      "Time for a set.",
+      "Quick set, then back to it.",
+      "Strength is a habit. Let's build it.",
+      "Thirty seconds of hard work.",
+      "Move a little, think better."
+    ],
+    "done": [
+      "Nice set.",
+      "Stronger than yesterday.",
+      "Logged. Good work.",
+      "That's how it's done.",
+      "Hydrate and carry on."
+    ],
+    "level_up": [
+      "Level up!",
+      "New movement unlocked.",
+      "You've outgrown that one."
+    ],
+    "boss": [
+      "Boss challenge: one all-out set.",
+      "Beat your record.",
+      "Everything you've got."
+    ],
+    "protein": [
+      "Protein check: did you hit your target today?"
+    ],
+    "bedtime": [
+      "Bedtime soon: muscle grows while you sleep."
+    ]
+  }
+}
