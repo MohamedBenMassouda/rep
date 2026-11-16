@@ -60,7 +60,12 @@ def load_config(paths):
         raise ConfigMissing(f"no config yet: run `rep init` ({paths.config_file})")
 
     with open(paths.config_file, "rb") as config_stream:
-        return merge(DEFAULTS, tomllib.load(config_stream))
+        config = merge(DEFAULTS, tomllib.load(config_stream))
+
+    if not config["profile"]["body_weight_kg"]:
+        raise ConfigMissing(f"your profile isn't set up yet: run `rep init` ({paths.config_file})")
+
+    return config
 
 
 def toml_value(value):

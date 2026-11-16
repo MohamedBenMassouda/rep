@@ -1,4 +1,5 @@
 import argparse
+import tomllib
 import json
 import os
 import random
@@ -12,7 +13,7 @@ from rep.app import ANSWERS, SESSION_KINDS, App
 from rep.backup import FORMAT_JSON, FORMATS, export_text, import_backup
 from rep.catalog import DEFAULT_PACK_RESOURCE, PackError, load_pack
 from rep.charts import stats_text
-from rep.config import ConfigMissing, load_config, save_config
+from rep.config import DEFAULTS, ConfigMissing, load_config, merge, save_config
 from rep.maxtest import run_test
 from rep.notifiers import Card, make_notifier, rep_command
 from rep.notifiers.desktop import AWAIT_SUBCOMMAND, await_notification
@@ -40,12 +41,11 @@ def build_app(paths):
 def command_init(paths, arguments):
     existing = None
 
-    try:
-        existing = load_config(paths)
-    except ConfigMissing:
-        pass
+    if paths.config_file.exists():
+        with open(paths.config_file, "rb") as config_stream:
+            existing = tomllib.load(config_stream)
 
-    config = run_wizard(pack_for(existing) if existing else load_pack(), existing)
+    config = run_wizard(pack_for(merge(DEFAULTS, existing)) if existing else load_pack(), existing)
     save_config(paths, config)
     print(f"\nSaved to {paths.config_file}.")
     print("Next: `rep test` (sets your targets), then `rep install-timer`.")
