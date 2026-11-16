@@ -13,6 +13,7 @@ from rep.app import ANSWERS, SESSION_KINDS, App
 from rep.backup import FORMAT_JSON, FORMATS, export_text, import_backup
 from rep.catalog import DEFAULT_PACK_RESOURCE, PackError, load_pack
 from rep.charts import stats_text
+from rep.completion import SHELLS, completion_script
 from rep.config import DEFAULTS, ConfigMissing, load_config, merge, save_config
 from rep.maxtest import run_test
 from rep.notifiers import Card, make_notifier, rep_command
@@ -147,6 +148,8 @@ def parser():
     pack.add_argument("action", choices=("path", "export"))
     commands.add_parser("install-timer", help="run `rep tick` every few minutes (systemd)")
     commands.add_parser("uninstall-timer", help="remove the timer")
+    completion = commands.add_parser("completion", help="print a shell completion script")
+    completion.add_argument("shell", choices=SHELLS)
     commands.add_parser("dismiss")
     waiting = commands.add_parser(AWAIT_SUBCOMMAND)
     waiting.add_argument("payload")
@@ -189,6 +192,8 @@ def dispatch(paths, arguments):
         print(install_timer())
     elif command == "uninstall-timer":
         print(uninstall_timer())
+    elif command == "completion":
+        print(completion_script(parser(), arguments.shell), end="")
     elif command == AWAIT_SUBCOMMAND:
         await_notification(arguments.payload)
 
