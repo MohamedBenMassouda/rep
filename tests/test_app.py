@@ -82,6 +82,15 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.log_session("upper"), "logged")
         self.assertTrue(self.app.log_session("arms").startswith("unknown"))
 
+    def test_a_routine_replaces_the_built_in_sessions(self):
+        config = config_with(conditions=NO_CHECKS, training={"routine": {"push": ["chest", "biceps"]}})
+        app = App(self.paths, config, default_pack(), self.notifier, seeded_random(), clock=lambda: FIXED_NOW)
+
+        self.assertEqual(app.log_session("push"), "logged")
+        self.assertTrue(app.log_session("upper").startswith("unknown"))
+        self.assertEqual(app.today()["sessions"], {"push": "chest + biceps"})
+        self.assertEqual(app.today()["trained"], ["push"])
+
         self.assertEqual([event["type"] for event in load_events(self.paths)], [EVENT_SESSION])
 
     def test_the_state_survives_a_restart_between_the_two_answer_steps(self):
