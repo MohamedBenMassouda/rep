@@ -24,6 +24,8 @@ DEFAULTS = {
             "legs": {"legs": 6},
             "full": {"push": 4, "pull": 4, "legs": 4, "core": 4},
         },
+        "routine": {},
+        "sets_per_muscle": 3,
         "skill_share_training_day": 0.7,
         "skill_share_rest_day": 0.3,
         "boss_after_hour": 15,

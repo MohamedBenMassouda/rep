@@ -8,6 +8,7 @@ from rep.lines import line_for
 from rep.notifiers import Button, Card
 from rep.progression import (KIND_BOSS, KIND_HARD, KIND_SKILL, RATING_EASY, RATING_FAILURE, RATING_STEADY,
                              apply_rating, cap_usage, streak_days, target_of)
+from rep.routine import describe_sessions, session_allowances
 from rep.scheduler import (ACTION_CHALLENGE, ACTION_NUDGE, ACTION_REMIND, ACTION_RETEST, ACTION_SCHEDULE_FIRST,
                            ACTION_SUMMARY, STAMP_RETEST, STAMP_SUMMARY, decide)
 from rep.store import (EVENT_SESSION, EVENT_SET, EVENT_SKIP, append_event, load_events, load_state, new_event,
@@ -33,7 +34,6 @@ RATING_LABELS = {
     KIND_BOSS: (("Beat my best", RATING_EASY), ("Matched it", RATING_STEADY), ("Below", RATING_FAILURE)),
 }
 RATING_GLYPHS = (GLYPH_ARROW_UP, GLYPH_CHECK, GLYPH_FIRE)
-SESSION_KINDS = ("upper", "legs", "full")
 
 
 class App:
@@ -43,6 +43,7 @@ class App:
         self.state = load_state(paths)
         self.events = load_events(paths)
         self.scale = level_scale(config)
+        config["training"]["session_allowances"] = session_allowances(config["training"], pack)
 
     def save(self):
         save_state(self.paths, self.state)
@@ -220,11 +221,13 @@ class App:
         self.notifier.show(Card(title.strip(), body))
 
     def log_session(self, session):
-        if session not in SESSION_KINDS:
-            return f"unknown session {session!r}: use {', '.join(SESSION_KINDS)}"
+        allowances = self.config["training"]["session_allowances"]
+
+        if session not in allowances:
+            return f"unknown session {session!r}: use {', '.join(allowances)}"
 
         self.record(EVENT_SESSION, session=session)
-        groups = ", ".join(self.config["training"]["session_allowances"][session])
+        groups = ", ".join(allowances[session])
         self.notifier.show(Card(f"Logged: {session} session", f"Today's challenges skip {groups}."))
 
         return "logged"
@@ -249,6 +252,7 @@ class App:
             "done": sum(1 for event in self.events if event["type"] == EVENT_SET and event["day"] == today),
             "streak": streak_days(self.events, self.clock().date(), self.config["training"]["streak_minimum"]),
             "trained": sessions,
+            "sessions": describe_sessions(self.config["training"], self.config["training"]["session_allowances"]),
             "skills": {self.pack.skills[skill].title: self.pack.exercises[self.current_skill_step(skill)].name
                        for skill in self.config["profile"]["skills"] if skill in self.pack.skills},
         }
