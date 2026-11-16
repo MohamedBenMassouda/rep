@@ -6,6 +6,8 @@ SHELL_BASH = "bash"
 SHELL_FISH = "fish"
 SHELLS = (SHELL_ZSH, SHELL_BASH, SHELL_FISH)
 FILE_DESTINATIONS = ("file", "output")
+COMPLETION_COMMAND = "completion_command"
+QUIET = "2>/dev/null"
 ZSH_SPECIAL_CHARACTERS = ("\\", ":", "[", "]")
 
 
@@ -32,8 +34,20 @@ def wants_file(action):
     return action.dest in FILE_DESTINATIONS
 
 
+def dynamic_command(action):
+    command = getattr(action, COMPLETION_COMMAND, None)
+
+    return f"rep {' '.join(command)} {QUIET}" if command else None
+
+
 def choice_words(action):
     return " ".join(str(choice) for choice in action.choices or ())
+
+
+def bash_words(action):
+    command = dynamic_command(action)
+
+    return f"$({command})" if command else choice_words(action)
 
 
 def long_flag(option):
@@ -50,6 +64,9 @@ def zsh_escape(text):
 def zsh_action(action):
     if wants_file(action):
         return "_files"
+
+    if dynamic_command(action):
+        return f'{{compadd -- ${{(f)"$({dynamic_command(action)})"}}}}'
 
     if action.choices:
         return f"({choice_words(action)})"
@@ -126,7 +143,7 @@ def bash_script(root):
                 value_cases.append(f"    {name}:{long_flag(option)}) {compgen}; return ;;")
 
         arguments = positionals(command_parser)
-        words = " ".join([choice_words(action) for action in arguments] + [long_flag(option) for option in options(command_parser)]).strip()
+        words = " ".join([bash_words(action) for action in arguments] + [long_flag(option) for option in options(command_parser)]).strip()
         with_files = any(wants_file(action) for action in arguments)
 
         if words or with_files:
@@ -167,6 +184,8 @@ def fish_script(root):
 
             if wants_file(action):
                 lines.append(f"complete -c rep -n {condition} -F")
+            elif dynamic_command(action):
+                lines.append(f"complete -c rep -n {condition} -a {shlex.quote('(' + dynamic_command(action) + ')')}")
             elif action.choices:
                 lines.append(f"complete -c rep -n {condition} -a {shlex.quote(choice_words(action))}")
 

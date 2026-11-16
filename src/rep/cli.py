@@ -9,17 +9,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-from rep.app import ANSWERS, SESSION_KINDS, App
+from rep.app import ANSWERS, App
 from rep.backup import FORMAT_JSON, FORMATS, export_text, import_backup
 from rep.catalog import DEFAULT_PACK_RESOURCE, PackError, load_pack
 from rep.charts import stats_text
-from rep.completion import SHELLS, completion_script
+from rep.completion import COMPLETION_COMMAND, SHELLS, completion_script
 from rep.config import DEFAULTS, ConfigMissing, load_config, merge, save_config
 from rep.maxtest import run_test
 from rep.notifiers import Card, make_notifier, rep_command
 from rep.notifiers.desktop import AWAIT_SUBCOMMAND, await_notification
 from rep.paths import default_paths
 from rep.progression import RATINGS, choose_challenge
+from rep.routine import RoutineError, describe_sessions
 from rep.timer import install_timer, uninstall_timer
 from rep.wizard import run_wizard
 
@@ -112,6 +113,15 @@ def command_pack(paths, arguments):
         print(config["training"]["pack_file"] or "built-in default pack")
 
 
+def command_routine(app, arguments):
+    training = app.config["training"]
+    descriptions = describe_sessions(training, training["session_allowances"])
+
+    for session, description in descriptions.items():
+        sets = ", ".join(f"{group} {count}" for group, count in training["session_allowances"][session].items())
+        print(session if arguments.names else f"{session}: {description}  (counts as {sets})")
+
+
 def load_pack_text():
     from importlib import resources
 
@@ -131,7 +141,9 @@ def parser():
     rate.add_argument("token")
     rate.add_argument("rating", type=int, choices=RATINGS)
     session = commands.add_parser("session", help="log a training session today")
-    session.add_argument("kind", choices=SESSION_KINDS)
+    setattr(session.add_argument("kind"), COMPLETION_COMMAND, ("routine", "--names"))
+    routine = commands.add_parser("routine", help="your training days and the muscles each one trains")
+    routine.add_argument("--names", action="store_true", help="only the day names")
     commands.add_parser("test", help="max test: sets ladders and targets")
     commands.add_parser("test-window", help="run the max test in a terminal window")
     stats = commands.add_parser("stats", help="targets, ladders, caps and progress")
@@ -175,6 +187,8 @@ def dispatch(paths, arguments):
         print(build_app(paths).answer(arguments.token, arguments.answer))
     elif command == "rate":
         print(build_app(paths).rate(arguments.token, arguments.rating))
+    elif command == "routine":
+        command_routine(build_app(paths), arguments)
     elif command == "session":
         print(build_app(paths).log_session(arguments.kind))
     elif command == "test":
@@ -208,6 +222,9 @@ def main(argv=None):
 
         if arguments.command != "tick":
             sys.exit(EXIT_PROBLEM)
+    except RoutineError as problem:
+        print(f"Config problem: {problem}", file=sys.stderr)
+        sys.exit(EXIT_PROBLEM)
     except PackError as problem:
         print(f"Exercise pack problem: {problem}", file=sys.stderr)
         sys.exit(EXIT_PROBLEM)
