@@ -1,0 +1,91 @@
+# rep
+
+Calisthenics challenges through the day. About once an hour `rep` shows you one set to do:
+a hard set that builds muscle, or short practice for a skill like the handstand or the one-arm
+pull-up. You answer from the notification, and your targets move with you.
+
+- **Hard sets and skill practice.** Hard sets go close to failure and count against weekly caps
+  per muscle group (push, pull, legs, core). Skill practice stays fresh and never counts.
+- **Ladders instead of more weight.** Each movement climbs a ladder of harder variations:
+  pull-ups go chest-to-bar → explosive → archer → typewriter; push-ups go clap → archer →
+  pseudo-planche → one-arm. Reaching the top of a rung unlocks the next one.
+- **Answers that steer progression.** Done / Skip / Later, then "how many reps were left?":
+  3+ left raises the target, three steady sets in a row raise it, failure keeps it.
+- **Your training days count.** Log a session (`rep session upper|legs|full`) and that day's
+  challenges skip those muscles and lean towards skill practice.
+- **Max test.** A guided test places every ladder at the hardest movement you can do for real and
+  sets targets from your numbers. A reminder comes every 6 weeks.
+- **Weekly boss challenge**, protein check-in, bedtime reminder and a daily summary with streaks.
+- **Waits when you're busy:** a call or recording using the mic, screen sharing, or any pause file
+  you name (e.g. a focus timer or the lock screen).
+- **Works on any Linux desktop:** standard notifications with buttons, a
+  [Quickshell](https://quickshell.org) flyout when available, or the terminal.
+
+## Install
+
+```sh
+uv tool install git+https://github.com/MohamedBenMassouda/rep   # or: pipx install …
+rep init            # asks for your body weight, level, skills, hours; saved locally only
+rep test            # 15-minute max test that sets your targets
+rep install-timer   # systemd user timer: checks every 3 minutes whether something is due
+```
+
+Python 3.11+, no dependencies. Buttons on desktop notifications need `notify-send` (libnotify)
+and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE…).
+
+## Commands
+
+| Command | Does |
+|---|---|
+| `rep now` | a challenge right now |
+| `rep session upper\|legs\|full` | log a training session today |
+| `rep stats [--history]` | targets, ladders, weekly caps; `--history` adds progress charts and compares max tests |
+| `rep test` / `rep test-window` | max test (in this terminal / in a new one) |
+| `rep today` | today's numbers as JSON, for widgets |
+| `rep summary` | show today's summary |
+| `rep export [--format json\|csv] [--output FILE]` | export your history |
+| `rep import FILE [--with-state]` | import a JSON export; events are merged, never duplicated |
+| `rep pack export` | copy the exercise pack to your config folder to edit or extend |
+| `rep install-timer` / `rep uninstall-timer` | the systemd user timer |
+
+## Configuration
+
+`~/.config/rep/config.toml` (written by `rep init`; edit freely):
+
+| Section | Settings |
+|---|---|
+| `[profile]` | `body_weight_kg`, `level` (beginner / intermediate / advanced), `skills` |
+| `[schedule]` | `start_hour`, `end_hour`, gap between challenges, `snooze_minutes`, `reminder_minutes` |
+| `[training]` | `weekly_caps`, `session_allowances`, skill share on training / rest days, boss settings, `streak_minimum`, `retest_days`, `pack_file` |
+| `[nudges]` | `protein`, `bedtime`, `summary` times (`HH:MM` or `off`) |
+| `[display]` | `notifier` (auto / quickshell / desktop / terminal), `quickshell_kind`, `line_command` |
+| `[conditions]` | `pause_files`, `check_microphone`, `check_screen_share` |
+
+`line_command` lets another program supply the lines on the cards, e.g. a themed set of quips:
+`line_command = "my-quips {kind}"` is called with `challenge`, `done`, `level_up`, `boss`,
+`protein` or `bedtime`, and its output replaces the pack's line.
+
+### Exercise packs
+
+Exercises, ladders, skills, bosses, the max test and the lines live in a JSON pack
+(`src/rep/data/default_pack.json`). `rep pack export` copies it to `~/.config/rep/packs/`; edit it
+(add movements, a front-lever skill, your own lines) and point `pack_file` at it. Each exercise
+has a `name`, `unit` (`reps`, `reps_per_side`, `seconds`, `tries`), `start`, `step`, `top` (where
+its ladder moves on) and a form `cue`.
+
+### Data
+
+State lives in `~/.local/state/rep/`: `state.json` (targets, ladder positions, the pending
+challenge) and `events.jsonl` (every set, skip, session and max test). Nothing leaves your computer.
+
+## Development
+
+```sh
+PYTHONPATH=src python3 -m unittest discover -s tests -t .
+```
+
+See `CLAUDE.md` for the code style contract and the rules around state and re-runs.
+
+## License
+
+MIT
