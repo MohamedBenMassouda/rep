@@ -1,5 +1,6 @@
 import datetime
 import functools
+import hashlib
 import json
 import random
 import zoneinfo
@@ -15,6 +16,8 @@ SETTING_CONFIG = "config"
 SETTING_PACK = "pack"
 SETTING_TIMEZONE = "timezone"
 SETTING_BUSY = "busy"
+SETTING_PACK_DIGEST = "pack_digest"
+SETTING_TODAY = "today"
 DEFAULT_TIMEZONE = "UTC"
 BUSY_REPORT_FRESH_SECONDS = 600
 RECENT_HISTORY_DAYS = 7
@@ -118,6 +121,9 @@ class SqlStore:
         self.execute("INSERT INTO cards (time, body) VALUES (?, ?)", now_seconds, json.dumps(card_to_dict(card)))
 
         return self.last_card_sequence()
+
+    def last_event_row(self):
+        return self.execute("SELECT COALESCE(MAX(rowid), 0) AS last FROM events")[0]["last"]
 
     def last_card_sequence(self):
         return self.execute("SELECT COALESCE(MAX(sequence), 0) AS last FROM cards")[0]["last"]
@@ -235,35 +241,53 @@ class Brain:
         return self.finish(app, text)
 
     def receive_report(self, report):
+        if "pack" in report:
+            self.store.put_setting(SETTING_PACK, report["pack"])
+            self.store.put_setting(SETTING_PACK_DIGEST, report["pack_digest"])
+
         self.store.put_setting(SETTING_CONFIG, report["config"])
-        self.store.put_setting(SETTING_PACK, report["pack"])
         self.store.put_setting(SETTING_TIMEZONE, report["timezone"])
         self.store.put_setting(SETTING_BUSY, {"reason": report["busy"], "time": self.now_seconds()})
         self.zone = None
 
+        return self.store.setting(SETTING_PACK_DIGEST) == report["pack_digest"]
+
+    def today_marker(self):
+        parts = (self.store.setting_text(SETTING_STATE) or "", self.store.setting_text(SETTING_CONFIG) or "",
+                 self.local_now().date().isoformat(), str(self.store.last_event_row()))
+
+        return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+    def today(self):
+        marker = self.today_marker()
+        cached = self.store.setting(SETTING_TODAY)
+
+        if cached and cached["marker"] == marker:
+            return cached["today"]
+
+        today = self.build_app().today()
+        self.store.put_setting(SETTING_TODAY, {"marker": marker, "today": today})
+
+        return today
+
     def catch_up(self, cursor):
-        cards = self.store.cards_after(cursor) if cursor is not None else []
-        app = self.build_app()
-        pending = app.state["pending"]
+        pending = self.store.load_state()["pending"]
 
         return {
-            "cards": cards,
+            "cards": self.store.cards_after(cursor) if cursor is not None else [],
             "cursor": self.store.last_card_sequence(),
             "pending": {"token": pending["token"], "stage": pending["stage"]} if pending else None,
-            "today": app.today(),
+            "today": self.today(),
         }
 
-    def desktop_sync(self, report):
-        self.receive_report(report)
-
-        return self.catch_up(report.get("cursor"))
-
     def desktop(self, action, body):
+        if action in (DESKTOP_SYNC, DESKTOP_COMMAND) and not self.receive_report(body["report"]):
+            return {"needs_pack": True}
+
         if action == DESKTOP_SYNC:
-            return self.desktop_sync(body)
+            return self.catch_up(body["report"].get("cursor"))
 
         if action == DESKTOP_COMMAND:
-            self.receive_report(body["report"])
             outcome = self.command(body.get("arguments", []))
 
             return {"text": outcome["text"], **self.catch_up(body["report"].get("cursor"))}

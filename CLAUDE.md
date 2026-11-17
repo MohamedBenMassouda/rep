@@ -181,6 +181,10 @@ its state transition runs again from the top:
   keeps one store for its lifetime (it is the only writer). Every query in it uses an index or
   the primary key: check `EXPLAIN QUERY PLAN` when adding one. A desktop command carries its sync
   report, so it is one round trip.
+- The desktop sends the 20 KB pack only when its digest changed; a cloud whose digest differs
+  answers `needs_pack` before running anything, so the resend never runs a command twice.
+  `today` is cached under a marker of the state, config, date and `MAX(rowid)` of events; never
+  use `COUNT(*)` for such checks (Durable Objects bill rows read).
 - The Worker's one secret is `DESKTOP_TOKEN`; the desktop's `[sync]` section never leaves the
   desktop.
 

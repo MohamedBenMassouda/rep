@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import urllib.error
@@ -18,6 +19,7 @@ DEFAULT_TIMEZONE = "UTC"
 AUTHORIZATION_SCHEME = "Bearer "
 JSON_CONTENT_TYPE = "application/json"
 USER_AGENT = "rep-desktop"
+PACK_DIGEST_LENGTH = 16
 
 
 class SyncError(RuntimeError):
@@ -81,11 +83,31 @@ def write_sync_state(paths, sync_state):
     temporary_file.replace(sync_file(paths))
 
 
-def desktop_report(paths, config, pack_raw, busy):
-    shared_config = {section: values for section, values in config.items() if section != SYNC_SECTION}
+def pack_digest(pack_raw):
+    return hashlib.sha256(json.dumps(pack_raw, sort_keys=True).encode()).hexdigest()[:PACK_DIGEST_LENGTH]
 
-    return {"config": shared_config, "pack": pack_raw, "timezone": local_timezone(), "busy": busy,
-            "cursor": read_sync_state(paths)["cursor"]}
+
+def desktop_report(paths, config, pack_raw, busy, include_pack):
+    shared_config = {section: values for section, values in config.items() if section != SYNC_SECTION}
+    report = {"config": shared_config, "pack_digest": pack_digest(pack_raw), "timezone": local_timezone(),
+              "busy": busy, "cursor": read_sync_state(paths)["cursor"]}
+
+    if include_pack:
+        report["pack"] = pack_raw
+
+    return report
+
+
+def send_report(client, paths, action, body, config, pack_raw, busy):
+    cloud_has_pack = read_sync_state(paths).get("pack_digest") == pack_digest(pack_raw)
+    response = client.call(action, {**body, "report": desktop_report(paths, config, pack_raw, busy, not cloud_has_pack)})
+
+    if response.get("needs_pack"):
+        response = client.call(action, {**body, "report": desktop_report(paths, config, pack_raw, busy, True)})
+
+    write_sync_state(paths, {**read_sync_state(paths), "pack_digest": pack_digest(pack_raw)})
+
+    return response
 
 
 def apply_catch_up(paths, notifier, response, now_seconds):
@@ -102,22 +124,21 @@ def apply_catch_up(paths, notifier, response, now_seconds):
         notifier.show(card)
 
     showing_pending = any(card.sticky for card in fresh_cards) or sync_state["open"] == pending
-    write_sync_state(paths, {"cursor": response["cursor"], "open": pending if showing_pending else None})
+    write_sync_state(paths, {**sync_state, "cursor": response["cursor"], "open": pending if showing_pending else None})
     paths.today_file.write_text(json.dumps(response["today"]))
 
     return len(fresh_cards)
 
 
 def desktop_tick(client, paths, config, pack_raw, notifier, busy, now_seconds):
-    response = client.call(DESKTOP_SYNC, desktop_report(paths, config, pack_raw, busy))
+    response = send_report(client, paths, DESKTOP_SYNC, {}, config, pack_raw, busy)
     shown = apply_catch_up(paths, notifier, response, now_seconds)
 
     return busy or f"synced, {shown} new cards"
 
 
 def desktop_command(client, paths, config, pack_raw, notifier, busy, now_seconds, arguments):
-    report = desktop_report(paths, config, pack_raw, busy)
-    response = client.call(DESKTOP_COMMAND, {"arguments": arguments, "report": report})
+    response = send_report(client, paths, DESKTOP_COMMAND, {"arguments": arguments}, config, pack_raw, busy)
     apply_catch_up(paths, notifier, response, now_seconds)
 
     return response["text"]

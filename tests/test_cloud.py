@@ -3,9 +3,10 @@ import unittest
 import zoneinfo
 
 from rep.app import ANSWER_DONE
-from rep.cloud import BUSY_REPORT_FRESH_SECONDS, NOT_CONFIGURED, Brain, SqlStore
+from rep.cloud import BUSY_REPORT_FRESH_SECONDS, DESKTOP_COMMAND, DESKTOP_SYNC, NOT_CONFIGURED, Brain, SqlStore
 from rep.progression import RATING_STEADY
 from rep.store import EVENT_SET, EVENT_TEST, new_event
+from rep.sync import pack_digest
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
 
 TIMEZONE = "Africa/Tunis"
@@ -13,6 +14,10 @@ MORNING_UTC = datetime.datetime(2026, 11, 18, 10, 0, tzinfo=datetime.timezone.ut
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
 LONG_STREAK_DAYS = 12
 ONLY_THE_BUSY_REPORT = 1
+
+
+def unbuildable_app():
+    raise AssertionError("the app was built")
 
 
 def unreadable_history():
@@ -28,11 +33,13 @@ class CloudTests(unittest.TestCase):
         return Brain(SqlStore(self.execute), clock=lambda: self.moment, chooser=seeded_random())
 
     def sync_report(self, busy=None, cursor=None):
-        return {"config": config_with(conditions=NO_CHECKS), "pack": default_pack_raw(), "timezone": TIMEZONE,
-                "busy": busy, "cursor": cursor}
+        pack = default_pack_raw()
+
+        return {"config": config_with(conditions=NO_CHECKS), "pack": pack, "pack_digest": pack_digest(pack),
+                "timezone": TIMEZONE, "busy": busy, "cursor": cursor}
 
     def sync(self, busy=None, cursor=None):
-        return self.brain().desktop_sync(self.sync_report(busy, cursor))
+        return self.brain().desktop(DESKTOP_SYNC, {"report": self.sync_report(busy, cursor)})
 
     def pending(self):
         return self.brain().store.load_state()["pending"]
@@ -133,9 +140,19 @@ class CloudTests(unittest.TestCase):
         recording = lambda statement, *parameters: (writes.append(statement) if statement.startswith(
             "INSERT INTO settings") else None) or self.execute(statement, *parameters)
         store = SqlStore(recording)
-        Brain(store, clock=lambda: self.moment).desktop_sync(self.sync_report())
+        Brain(store, clock=lambda: self.moment).desktop(DESKTOP_SYNC, {"report": self.sync_report()})
 
         self.assertEqual(len(writes), ONLY_THE_BUSY_REPORT)
+
+    def test_todays_numbers_are_reused_until_something_changes(self):
+        self.sync()
+        brain = self.brain()
+        brain.build_app = unbuildable_app
+
+        brain.desktop(DESKTOP_SYNC, {"report": self.sync_report()})
+
+        self.command("session", "upper")
+        self.assertEqual(self.sync()["today"]["trained"], ["upper"])
 
     def test_importing_the_same_backup_twice_adds_nothing(self):
         self.sync()

@@ -39,6 +39,7 @@ class SyncTests(unittest.TestCase):
         self.notifier = RecordingNotifier()
         self.client = SyncClient(CLOUD_URL, TOKEN, self.post)
         self.calls = 0
+        self.sent_packs = 0
 
     def tearDown(self):
         self.directory.cleanup()
@@ -48,6 +49,7 @@ class SyncTests(unittest.TestCase):
 
     def post(self, url, body, token):
         self.calls += 1
+        self.sent_packs += "pack" in body.get("report", {})
         self.assertEqual(token, TOKEN)
         action = url.rsplit("/", 1)[1]
 
@@ -135,6 +137,23 @@ class SyncTests(unittest.TestCase):
         request = sync_request(CLOUD_URL, {}, TOKEN)
 
         self.assertEqual(request.get_header("User-agent"), USER_AGENT)
+
+    def test_the_pack_is_sent_once_and_not_again_while_it_is_unchanged(self):
+        self.tick()
+        self.tick()
+        self.tick()
+
+        self.assertEqual(self.sent_packs, 1)
+
+    def test_a_cloud_that_lost_the_pack_gets_it_again_without_running_the_command_twice(self):
+        self.tick()
+        self.execute("DELETE FROM settings")
+        self.calls = 0
+
+        self.desktop("now")
+
+        self.assertEqual(self.calls, 2)
+        self.assertEqual(len(self.notifier.cards), 1)
 
     def test_the_sync_token_stays_on_the_desktop(self):
         self.tick()
