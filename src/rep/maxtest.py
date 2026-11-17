@@ -7,6 +7,33 @@ MINIMUM_REAL_REPS = 3
 MINIMUM_REAL_SECONDS = 10
 MINIMUM_TARGET = 1
 QUESTION_UNITS = {"reps": "reps", "reps_per_side": "reps per side", "seconds": "seconds", "tries": "tries"}
+TEST_INSTRUCTIONS = "Max test: one all-out set each, rest 2-3 minutes between."
+QUESTION_RESULT = "result"
+QUESTION_SKILL = "skill"
+
+
+def result_question(exercise):
+    return f"{exercise.name}: max {QUESTION_UNITS[exercise.unit]}"
+
+
+def skill_question(ladder):
+    return f"{ladder.title}: where are you?"
+
+
+def skill_options(pack, ladder):
+    return [pack.exercises[exercise_identifier].name for exercise_identifier in ladder.exercise_identifiers]
+
+
+def skill_step(answer, ladder):
+    valid = answer.isdigit() and 1 <= int(answer) <= len(ladder.exercise_identifiers)
+
+    return int(answer) - 1 if valid else None
+
+
+def test_questions(pack, skills):
+    questions = [(QUESTION_RESULT, exercise_identifier) for exercise_identifier in pack.test]
+
+    return questions + [(QUESTION_SKILL, skill) for skill in skills if skill in pack.skills]
 
 
 def counts_as_real(exercise, result):
@@ -16,12 +43,11 @@ def counts_as_real(exercise, result):
 
 
 def ask_results(pack, read, write):
-    write("Max test: one all-out set each, rest 2-3 minutes between. Enter skips one.\n")
+    write(f"{TEST_INSTRUCTIONS} Enter skips one.\n")
     results = {}
 
     for exercise_identifier in pack.test:
-        exercise = pack.exercises[exercise_identifier]
-        answer = read(f"  {exercise.name}: max {QUESTION_UNITS[exercise.unit]}: ").strip()
+        answer = read(f"  {result_question(pack.exercises[exercise_identifier])}: ").strip()
 
         if answer.isdigit():
             results[exercise_identifier] = int(answer)
@@ -34,14 +60,13 @@ def ask_skill_steps(pack, skills, read, write):
 
     for skill_identifier in skills:
         ladder = pack.skills[skill_identifier]
-        write(f"\n  {ladder.title}: where are you?")
+        write(f"\n  {skill_question(ladder)}")
 
-        for number, exercise_identifier in enumerate(ladder.exercise_identifiers, start=1):
-            write(f"    {number}. {pack.exercises[exercise_identifier].name}")
+        for number, name in enumerate(skill_options(pack, ladder), start=1):
+            write(f"    {number}. {name}")
 
-        answer = read("  Number (Enter = 1): ").strip()
-        valid = answer.isdigit() and 1 <= int(answer) <= len(ladder.exercise_identifiers)
-        steps[skill_identifier] = int(answer) - 1 if valid else 0
+        step = skill_step(read("  Number (Enter = 1): ").strip(), ladder)
+        steps[skill_identifier] = 0 if step is None else step
 
     return steps
 

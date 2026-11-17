@@ -1,8 +1,14 @@
 import json
 
+from rep.notifiers import Button
+
 API_ROOT = "https://api.telegram.org/bot"
 CALLBACK_SEPARATOR = " "
+TEST_START = "test-start"
+TEST_STEP = "test-step"
 PHONE_COMMANDS = ("answer", "rate", "dismiss", "session")
+PHONE_REPLACEMENTS = {"test-window": ("Start here", (TEST_START,))}
+TEST_CALLBACKS = (TEST_START, TEST_STEP)
 MESSAGE_LIMIT = 4096
 CALLBACK_DATA_LIMIT = 64
 SESSION_COMMAND = "session"
@@ -27,8 +33,17 @@ def callback_arguments(data):
     return data.split(CALLBACK_SEPARATOR)
 
 
+def phone_button(button):
+    if button.arguments and button.arguments[0] in PHONE_REPLACEMENTS:
+        label, arguments = PHONE_REPLACEMENTS[button.arguments[0]]
+
+        return Button(label, button.glyph, arguments)
+
+    return button if button.arguments and button.arguments[0] in PHONE_COMMANDS else None
+
+
 def phone_buttons(card):
-    return [button for button in card.buttons if button.arguments and button.arguments[0] in PHONE_COMMANDS]
+    return [phone_button(button) for button in card.buttons if phone_button(button)]
 
 
 def card_text(card):
@@ -94,6 +109,14 @@ def session_picker(chat_id, session_names):
     rows = [buttons[start:start + BUTTONS_PER_ROW] for start in range(0, len(buttons), BUTTONS_PER_ROW)]
 
     return {"method": METHOD_SEND, "payload": {"chat_id": chat_id, "text": SESSION_PROMPT,
+                                               "reply_markup": {"inline_keyboard": rows}}, "remember": False}
+
+
+def step_picker(chat_id, text, options):
+    rows = [[{"text": f"{number}. {name}", "callback_data": f"{TEST_STEP}{CALLBACK_SEPARATOR}{number}"}]
+            for number, name in enumerate(options, start=1)]
+
+    return {"method": METHOD_SEND, "payload": {"chat_id": chat_id, "text": text,
                                                "reply_markup": {"inline_keyboard": rows}}, "remember": False}
 
 

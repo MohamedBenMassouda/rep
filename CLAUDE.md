@@ -155,9 +155,15 @@ its state transition runs again from the top:
   spaces as `callback_data` (64 bytes at most); the phone only offers `answer`, `rate` and `dismiss`.
 - **Reps typed in Telegram** wait in `pending["typed"]` until the rating; `App.rate()` uses them when
   the button carries no reps.
-- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/help`)
+- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/help`)
   answer in plain text, never `parse_mode`, and are split at `MESSAGE_LIMIT`. Stats for the phone
   come from `charts.phone_stats_text()`, which shares its rows with the terminal's `stats_text()`.
+- **The max test in Telegram** keeps its progress in the `max_test` setting (absolute position and
+  answers, forgotten after `TEST_SESSION_SECONDS`), asks the questions `maxtest.test_questions()`
+  gives the desktop, and finishes through the same `apply-test` command. While it runs, numbers
+  answer the test and the cloud counts as busy. It clears the session before applying, so a
+  repeat can never record the test twice. Card buttons the phone can't run are swapped through
+  `PHONE_REPLACEMENTS` (the retest card's `test-window` becomes `test-start`).
 - **Settings keep their key order.** `put_setting()` must not sort keys: the routine's order is
   the order of your training days.
 - **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained`,

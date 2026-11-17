@@ -132,7 +132,8 @@ wherever you are: the other side catches up within one tick.
 In Telegram, tap the buttons as usual. While a set waits for its rating, send the reps you did as a
 number before tapping how it felt. The bot also takes `/now` (a challenge right away), `/session`
 (log a training day from buttons, or `/session chest-day`), `/today`, `/stats`, `/routine`,
-`/summary` and `/help`. The max test, export and import stay on the desktop.
+`/summary`, `/test` (the max test, one question at a time; `/skip` and `/cancel` work during it)
+and `/help`. Export and import stay on the desktop.
 
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
@@ -174,6 +175,7 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
      {"command": "stats", "description": "targets, ladders and the week's caps"},
      {"command": "routine", "description": "your training days"},
      {"command": "summary", "description": "today's summary"},
+     {"command": "test", "description": "the max test, one question at a time"},
      {"command": "help", "description": "what the bot can do"}]}'
    ```
 6. On your desktop, add to `~/.config/rep/config.toml`:

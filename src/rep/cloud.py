@@ -9,8 +9,11 @@ from rep.app import ANSWERS, STAGE_RATE, App
 from rep.catalog import parse_pack
 from rep.notifiers import Card, OutboxNotifier, card_to_dict
 from rep.charts import phone_stats_text
-from rep.notifiers.telegram import (CALLBACK_SEPARATOR, PHONE_COMMANDS, acknowledge, callback_arguments, clear_buttons, phone_buttons,
-                                    routine_text, send_card, send_long_text, send_text, session_picker, today_text)
+from rep.maxtest import (QUESTION_RESULT, TEST_INSTRUCTIONS, result_question, skill_options, skill_question, skill_step,
+                         test_questions)
+from rep.notifiers.telegram import (CALLBACK_SEPARATOR, PHONE_COMMANDS, TEST_CALLBACKS, TEST_START, acknowledge,
+                                    callback_arguments, clear_buttons, phone_buttons, routine_text, send_card,
+                                    send_long_text, send_text, session_picker, step_picker, today_text)
 from rep.routine import describe_sessions
 from rep.progression import RATINGS
 from rep.store import EVENT_SET, EVENT_TEST, empty_state
@@ -24,6 +27,9 @@ SETTING_PACK_DIGEST = "pack_digest"
 SETTING_TODAY = "today"
 SETTING_OPEN_MESSAGE = "open_message"
 SETTING_LAST_UPDATE = "last_telegram_update"
+SETTING_MAX_TEST = "max_test"
+TEST_SESSION_SECONDS = 7200
+MAXIMUM_TEST_RESULT = 999
 DEFAULT_TIMEZONE = "UTC"
 BUSY_REPORT_FRESH_SECONDS = 600
 RECENT_HISTORY_DAYS = 7
@@ -41,6 +47,9 @@ TELEGRAM_TODAY = "/today"
 TELEGRAM_STATS = "/stats"
 TELEGRAM_ROUTINE = "/routine"
 TELEGRAM_SUMMARY = "/summary"
+TELEGRAM_TEST = "/test"
+TELEGRAM_SKIP = "/skip"
+TELEGRAM_CANCEL = "/cancel"
 TELEGRAM_HELP_COMMANDS = ("/help", "/start")
 TELEGRAM_BOT_SUFFIX = "@"
 TELEGRAM_COMMAND_PREFIX = "/"
@@ -57,6 +66,7 @@ STATUS_NOTHING_TO_RATE = "nothing to rate"
 STATUS_TYPED = "typed"
 STATUS_DUPLICATE = "duplicate update"
 STATUS_ANSWERED = "answered"
+STATUS_TESTING = "max test in progress"
 ANSWER_ARGUMENT_COUNT = 3
 SINGLE_VALUE_ARGUMENT_COUNT = 2
 NO_LINE_COMMAND = ""
@@ -75,9 +85,16 @@ TELEGRAM_HELP = "\n".join((
     "/stats: targets, ladders and the week's caps",
     "/routine: your training days and their muscles",
     "/summary: today's summary",
+    "/test: the max test, one question at a time (/skip, /cancel)",
     "",
-    "The max test, export and import stay on your desktop: rep test, rep export, rep import.",
+    "Export and import stay on your desktop: rep export, rep import.",
 ))
+TEST_INTRO = f"{TEST_INSTRUCTIONS} Send each result as a number, /skip to leave one out, /cancel to stop."
+TEST_CANCELLED = "Max test stopped. Nothing was saved."
+TEST_NOT_RUNNING = "No max test is running: /test starts one."
+TEST_EMPTY = "This exercise pack has no max test."
+TEST_BAD_RESULT = f"Send a number up to {MAXIMUM_TEST_RESULT}, /skip or /cancel."
+TEST_BAD_STEP = "Pick one of the buttons, send its number, /skip or /cancel."
 TELEGRAM_UNKNOWN_CHAT = "This chat isn't linked to rep. Its chat id is {chat_id}: set it as TELEGRAM_CHAT_ID."
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -214,6 +231,9 @@ class Brain:
         return int(self.clock().timestamp())
 
     def busy_reason(self):
+        if self.test_session():
+            return STATUS_TESTING
+
         report = self.store.setting(SETTING_BUSY)
 
         if report and self.now_seconds() - report["time"] < BUSY_REPORT_FRESH_SECONDS:
@@ -394,7 +414,13 @@ class Brain:
         if self.store.setting(SETTING_OPEN_MESSAGE) == message_id:
             self.store.put_setting(SETTING_OPEN_MESSAGE, None)
 
-        outcome = self.command(arguments) if arguments[0] in PHONE_COMMANDS else empty_outcome(IGNORED_ARGUMENTS)
+        if arguments[0] in TEST_CALLBACKS:
+            outcome = self.start_test() if arguments[0] == TEST_START else self.answer_test(arguments[-1])
+        elif arguments[0] in PHONE_COMMANDS:
+            outcome = self.command(arguments)
+        else:
+            outcome = empty_outcome(IGNORED_ARGUMENTS)
+
         outcome["telegram"] = [acknowledge(callback["id"], outcome["text"]),
                                clear_buttons(self.chat_id, message_id)] + outcome["telegram"]
 
@@ -415,11 +441,17 @@ class Brain:
         return {**empty_outcome(status), "telegram": send_long_text(self.chat_id, text)}
 
     def telegram_text(self, text):
+        command, _, argument = text.partition(CALLBACK_SEPARATOR)
+        command = command.split(TELEGRAM_BOT_SUFFIX, 1)[0].lower()
+
+        if command in (TELEGRAM_SKIP, TELEGRAM_CANCEL) or (text.isdigit() and self.test_session()):
+            return self.test_reply(command, text)
+
         if text.isdigit():
             return self.typed_reps(int(text))
 
-        command, _, argument = text.partition(CALLBACK_SEPARATOR)
-        command = command.split(TELEGRAM_BOT_SUFFIX, 1)[0].lower()
+        if command == TELEGRAM_TEST:
+            return self.start_test()
 
         if command in TELEGRAM_HELP_COMMANDS or not command.startswith(TELEGRAM_COMMAND_PREFIX):
             return self.reply(STATUS_HELP, TELEGRAM_HELP)
@@ -477,3 +509,97 @@ class Brain:
         app.save()
 
         return self.reply(STATUS_TYPED, TYPED_REPS_REPLY.format(done=done))
+
+    def test_session(self):
+        session = self.store.setting(SETTING_MAX_TEST)
+
+        if session and self.now_seconds() - session["started"] < TEST_SESSION_SECONDS:
+            return session
+
+        return None
+
+    def test_reply(self, command, text):
+        if not self.test_session():
+            return self.reply(STATUS_HELP, TEST_NOT_RUNNING)
+
+        if command == TELEGRAM_CANCEL:
+            self.store.put_setting(SETTING_MAX_TEST, None)
+
+            return self.reply(STATUS_ANSWERED, TEST_CANCELLED)
+
+        return self.answer_test(None if command == TELEGRAM_SKIP else text)
+
+    def test_plan(self):
+        app = self.build_app()
+
+        return app, test_questions(app.pack, app.config["profile"]["skills"])
+
+    def ask_test_question(self, app, questions, position):
+        kind, identifier = questions[position]
+        counter = f"{position + 1}/{len(questions)} · "
+
+        if kind == QUESTION_RESULT:
+            return [send_text(self.chat_id, f"{counter}{result_question(app.pack.exercises[identifier])}?")]
+
+        ladder = app.pack.skills[identifier]
+
+        return [step_picker(self.chat_id, counter + skill_question(ladder), skill_options(app.pack, ladder))]
+
+    def start_test(self):
+        if not self.configured():
+            return self.reply(NOT_CONFIGURED, NOT_CONFIGURED)
+
+        app, questions = self.test_plan()
+
+        if not questions:
+            return self.reply(STATUS_HELP, TEST_EMPTY)
+
+        self.store.put_setting(SETTING_MAX_TEST, {"started": self.now_seconds(), "position": 0, "results": {},
+                                                  "skill_steps": {}})
+        questions_text = self.ask_test_question(app, questions, 0)
+
+        return {**empty_outcome(STATUS_TESTING), "telegram": [send_text(self.chat_id, TEST_INTRO)] + questions_text}
+
+    def answer_test(self, answer):
+        session = self.test_session()
+
+        if not session:
+            return self.reply(STATUS_HELP, TEST_NOT_RUNNING)
+
+        app, questions = self.test_plan()
+        position = session["position"]
+
+        if position < len(questions):
+            kind, identifier = questions[position]
+
+            if kind == QUESTION_RESULT and answer is not None:
+
+                if not answer.isdigit() or int(answer) > MAXIMUM_TEST_RESULT:
+                    return self.reply(STATUS_TESTING, TEST_BAD_RESULT)
+
+                session["results"][identifier] = int(answer)
+            elif kind != QUESTION_RESULT:
+                step = 0 if answer is None else skill_step(answer, app.pack.skills[identifier])
+
+                if step is None:
+                    return self.reply(STATUS_TESTING, TEST_BAD_STEP)
+
+                session["skill_steps"][identifier] = step
+
+        session["position"] = position + 1
+
+        if session["position"] < len(questions):
+            self.store.put_setting(SETTING_MAX_TEST, session)
+
+            return {**empty_outcome(STATUS_TESTING), "telegram": self.ask_test_question(app, questions,
+                                                                                         session["position"])}
+
+        return self.finish_test(session)
+
+    def finish_test(self, session):
+        self.store.put_setting(SETTING_MAX_TEST, None)
+        test = json.dumps({"results": session["results"], "skill_steps": session["skill_steps"]})
+        outcome = self.command([COMMAND_APPLY_TEST, test])
+        summary = f"{outcome['text']}\n\n{phone_stats_text(self.build_app())}"
+
+        return {**outcome, "telegram": outcome["telegram"] + send_long_text(self.chat_id, summary)}

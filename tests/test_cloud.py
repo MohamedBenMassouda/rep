@@ -3,10 +3,11 @@ import unittest
 import zoneinfo
 
 from rep.app import ANSWER_DONE
-from rep.cloud import BUSY_REPORT_FRESH_SECONDS, DESKTOP_COMMAND, DESKTOP_SYNC, NOT_CONFIGURED, Brain, SqlStore
+from rep.cloud import (BUSY_REPORT_FRESH_SECONDS, DESKTOP_COMMAND, DESKTOP_SYNC, MAXIMUM_TEST_RESULT, NOT_CONFIGURED,
+                       STATUS_TESTING, TEST_NOT_RUNNING, TEST_SESSION_SECONDS, Brain, SqlStore)
 from rep.notifiers.telegram import METHOD_CLEAR_BUTTONS, METHOD_SEND
 from rep.progression import RATING_STEADY
-from rep.notifiers.telegram import MESSAGE_LIMIT, split_message
+from rep.notifiers.telegram import MESSAGE_LIMIT, TEST_START, split_message
 from rep.store import EVENT_SESSION, EVENT_SET, EVENT_TEST, new_event
 from rep.sync import pack_digest
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
@@ -18,6 +19,8 @@ TAPPED_MESSAGE = 55
 REPEATED_UPDATE = 500
 LONG_LINE_REPEATS = 50
 LONG_REPLY_LINES = 60
+TESTED_REPS = 12
+CHOSEN_STEP = 2
 TIMEZONE = "Africa/Tunis"
 MORNING_UTC = datetime.datetime(2026, 11, 18, 10, 0, tzinfo=datetime.timezone.utc)
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
@@ -210,6 +213,85 @@ class CloudTests(unittest.TestCase):
 
         self.assertTrue(all(len(chunk) <= MESSAGE_LIMIT for chunk in chunks))
         self.assertEqual("\n".join(chunks), text)
+
+    def play_max_test(self):
+        self.send("/test")
+        questions = len(self.brain().build_app().pack.test)
+        self.send("/skip")
+
+        for _ in range(questions - 1):
+            self.send(str(TESTED_REPS))
+
+        self.tap(f"test-step {CHOSEN_STEP}")
+
+        return self.tap(f"test-step {CHOSEN_STEP}")
+
+    def test_a_max_test_played_on_the_phone_is_recorded_like_the_desktop_one(self):
+        self.sync()
+
+        finished = self.play_max_test()
+
+        tests = [event for event in self.brain().export()["events"] if event["type"] == EVENT_TEST]
+        state = self.brain().store.load_state()
+        pack = self.brain().build_app().pack
+        self.assertEqual(len(tests), 1)
+        self.assertNotIn(pack.test[0], tests[0]["results"])
+        self.assertEqual(set(tests[0]["results"].values()), {TESTED_REPS})
+        self.assertEqual(tests[0]["skill_steps"], {"handstand": CHOSEN_STEP - 1, "one_arm_pull_up": CHOSEN_STEP - 1})
+        self.assertEqual(state["rungs"]["handstand"], CHOSEN_STEP - 1)
+        self.assertIn("Targets set.", self.replies(finished))
+        self.assertIn(TEST_NOT_RUNNING, self.replies(self.send("/skip")))
+
+    def test_numbers_during_a_max_test_answer_the_test_and_not_a_waiting_rating(self):
+        self.sync()
+        self.command("now")
+        token = self.pending()["token"]
+        self.tap(f"answer {token} {ANSWER_DONE}")
+        self.send("/test")
+
+        self.send(str(TESTED_REPS))
+
+        self.assertNotIn("typed", self.pending())
+
+    def test_cancelling_a_max_test_saves_nothing(self):
+        self.sync()
+        self.send("/test")
+        self.send(str(TESTED_REPS))
+
+        self.send("/cancel")
+
+        tests = [event for event in self.brain().export()["events"] if event["type"] == EVENT_TEST]
+        self.assertEqual(tests, [])
+        self.assertIn(TEST_NOT_RUNNING, self.replies(self.send("/skip")))
+
+    def test_a_result_out_of_range_is_asked_again(self):
+        self.sync()
+        self.send("/test")
+
+        self.send(str(MAXIMUM_TEST_RESULT + 1))
+        self.send(str(TESTED_REPS))
+
+        tests_state = self.brain().store.setting("max_test")
+        self.assertEqual(tests_state["position"], 1)
+
+    def test_a_max_test_in_progress_holds_challenges_back_until_it_goes_stale(self):
+        self.sync()
+        self.send("/test")
+
+        self.assertEqual(self.brain().busy_reason(), STATUS_TESTING)
+
+        self.moment += datetime.timedelta(seconds=TEST_SESSION_SECONDS)
+        self.assertNotEqual(self.brain().busy_reason(), STATUS_TESTING)
+
+    def test_the_retest_reminder_offers_to_start_the_test_on_the_phone(self):
+        self.sync()
+
+        outcome = self.brain().tick()
+
+        buttons = [button["callback_data"] for row in
+                   telegram_calls(outcome, METHOD_SEND)[0]["payload"]["reply_markup"]["inline_keyboard"] for button in row]
+        self.assertIn(TEST_START, buttons)
+        self.assertNotIn("test-window", buttons)
 
     def test_a_fresh_busy_report_holds_challenges_back_and_a_stale_one_does_not(self):
         self.sync()
