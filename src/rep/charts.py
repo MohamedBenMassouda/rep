@@ -1,6 +1,6 @@
 from rep.catalog import format_amount
 from rep.maxtest import test_history
-from rep.progression import cap_usage, current_exercise, streak_days, target_of
+from rep.progression import cap_usage, current_exercise, target_of
 from rep.store import EVENT_SET
 
 SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
@@ -39,31 +39,53 @@ def next_step_text(pack, ladder, exercise_identifier):
     return f"→ {next_exercise.name} at {pack.exercises[exercise_identifier].top}"
 
 
-def stats_text(app, with_history=False):
-    today = app.clock().date()
+def week_text(app):
     training = app.config["training"]
-    usage = cap_usage(app.events, app.pack.groups, training["session_allowances"], today)
-    week = ", ".join(f"{group} {usage[group]}/{training['weekly_caps'].get(group, 0)}" for group in app.pack.groups)
-    streak = streak_days(app.events, today, training["streak_minimum"])
-    lines = [f"{BOLD}Streak {streak} days · week: {week}{RESET}", ""]
+    usage = cap_usage(app.events, app.pack.groups, training["session_allowances"], app.clock().date())
+
+    return ", ".join(f"{group} {usage[group]}/{training['weekly_caps'].get(group, 0)}" for group in app.pack.groups)
+
+
+def ladder_sections(app):
     sections = [(group.upper(), app.pack.ladders_in_group(group)) for group in app.pack.groups]
     sections.append(("SKILLS", [app.pack.skills[skill] for skill in app.config["profile"]["skills"] if skill in app.pack.skills]))
 
-    for title, ladders in sections:
+    return [(title, [ladder_row(app, ladder) for ladder in ladders]) for title, ladders in sections]
+
+
+def ladder_row(app, ladder):
+    exercise_identifier = current_exercise(app.state, ladder)
+    exercise = app.pack.exercises[exercise_identifier]
+    amount = format_amount(exercise, target_of(app.state, app.pack, exercise_identifier, app.scale))
+
+    return ladder, exercise.name, amount, next_step_text(app.pack, ladder, exercise_identifier)
+
+
+def stats_text(app, with_history=False):
+    streak = app.streak(app.clock().date())
+    lines = [f"{BOLD}Streak {streak} days · week: {week_text(app)}{RESET}", ""]
+
+    for title, rows in ladder_sections(app):
         lines.append(f"{BLUE}{title}{RESET}")
 
-        for ladder in ladders:
-            exercise_identifier = current_exercise(app.state, ladder)
-            exercise = app.pack.exercises[exercise_identifier]
-            amount = format_amount(exercise, target_of(app.state, app.pack, exercise_identifier, app.scale))
+        for ladder, name, amount, next_step in rows:
             history = sparkline(ladder_amounts(app.events, ladder)[-HISTORY_POINTS:]) if with_history else ""
-            lines.append(f"  {exercise.name:{NAME_WIDTH}} {amount:{AMOUNT_WIDTH}} {history:{HISTORY_POINTS}}  "
-                         f"{YELLOW}{next_step_text(app.pack, ladder, exercise_identifier)}{RESET}")
+            lines.append(f"  {name:{NAME_WIDTH}} {amount:{AMOUNT_WIDTH}} {history:{HISTORY_POINTS}}  "
+                         f"{YELLOW}{next_step}{RESET}")
 
         lines.append("")
 
     if with_history:
         lines += test_comparison(app)
+
+    return "\n".join(lines)
+
+
+def phone_stats_text(app):
+    lines = [f"Streak {app.streak(app.clock().date())} days", f"Week: {week_text(app)}"]
+
+    for title, rows in ladder_sections(app):
+        lines += ["", title] + [f"• {name}: {amount}\n   {next_step}" for _, name, amount, next_step in rows]
 
     return "\n".join(lines)
 

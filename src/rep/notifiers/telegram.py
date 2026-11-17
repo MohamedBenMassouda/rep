@@ -2,7 +2,13 @@ import json
 
 API_ROOT = "https://api.telegram.org/bot"
 CALLBACK_SEPARATOR = " "
-PHONE_COMMANDS = ("answer", "rate", "dismiss")
+PHONE_COMMANDS = ("answer", "rate", "dismiss", "session")
+MESSAGE_LIMIT = 4096
+CALLBACK_DATA_LIMIT = 64
+SESSION_COMMAND = "session"
+BUTTONS_PER_ROW = 2
+NO_SESSIONS_TEXT = "No training days yet: add a routine with `rep init` on your desktop."
+SESSION_PROMPT = "Which training day did you do?"
 METHOD_SEND = "sendMessage"
 METHOD_CLEAR_BUTTONS = "editMessageReplyMarkup"
 METHOD_ACKNOWLEDGE = "answerCallbackQuery"
@@ -57,6 +63,50 @@ def clear_buttons(chat_id, message_id):
 def acknowledge(callback_query_id, text):
     return {"method": METHOD_ACKNOWLEDGE, "payload": {"callback_query_id": callback_query_id, "text": text},
             "remember": False}
+
+
+def split_message(text):
+    chunks, current = [], ""
+
+    for line in text.split("\n"):
+        candidate = f"{current}\n{line}" if current else line
+
+        if len(candidate) > MESSAGE_LIMIT and current:
+            chunks.append(current)
+            candidate = line
+
+        current = candidate[:MESSAGE_LIMIT]
+
+    return chunks + [current] if current else chunks
+
+
+def send_long_text(chat_id, text):
+    return [send_text(chat_id, chunk) for chunk in split_message(text)]
+
+
+def session_picker(chat_id, session_names):
+    buttons = [{"text": name, "callback_data": f"{SESSION_COMMAND}{CALLBACK_SEPARATOR}{name}"} for name in session_names
+               if len(f"{SESSION_COMMAND}{CALLBACK_SEPARATOR}{name}".encode()) <= CALLBACK_DATA_LIMIT]
+
+    if not buttons:
+        return send_text(chat_id, NO_SESSIONS_TEXT)
+
+    rows = [buttons[start:start + BUTTONS_PER_ROW] for start in range(0, len(buttons), BUTTONS_PER_ROW)]
+
+    return {"method": METHOD_SEND, "payload": {"chat_id": chat_id, "text": SESSION_PROMPT,
+                                               "reply_markup": {"inline_keyboard": rows}}, "remember": False}
+
+
+def today_text(today):
+    trained = ", ".join(today["trained"]) or "nothing logged yet"
+    skills = [f"• {skill}: {step}" for skill, step in today["skills"].items()]
+
+    return "\n".join([f"Today: {today['done']} sets · streak {today['streak']} days", f"Trained: {trained}"]
+                     + (["", "Skills"] + skills if skills else []))
+
+
+def routine_text(descriptions):
+    return "\n".join(f"• {name}: {muscles}" for name, muscles in descriptions.items()) or NO_SESSIONS_TEXT
 
 
 def request_body(call):

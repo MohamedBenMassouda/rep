@@ -130,7 +130,9 @@ screen share, pause files), shows the same cards in your flyout, and forwards yo
 wherever you are: the other side catches up within one tick.
 
 In Telegram, tap the buttons as usual. While a set waits for its rating, send the reps you did as a
-number before tapping how it felt. `/now` asks for a challenge right away.
+number before tapping how it felt. The bot also takes `/now` (a challenge right away), `/session`
+(log a training day from buttons, or `/session chest-day`), `/today`, `/stats`, `/routine`,
+`/summary` and `/help`. The max test, export and import stay on the desktop.
 
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
@@ -148,6 +150,7 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
    npx wrangler deploy
    npx wrangler secret put DESKTOP_TOKEN
    npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
+   npx wrangler secret put TELEGRAM_CHAT_ID
    ```
 
    The second `deploy` prints the address, `https://rep-api.<your-subdomain>.workers.dev`.
@@ -158,8 +161,21 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
      -d url=https://rep-api.<your-subdomain>.workers.dev/telegram -d secret_token=<TELEGRAM_WEBHOOK_SECRET>
    ```
 
-5. Send your bot any message. It answers with your chat id; store it on the Python Worker and only
-   that chat is listened to from then on: `cd worker && uv run pywrangler secret put TELEGRAM_CHAT_ID`.
+5. Send your bot any message. It answers with your chat id; store it on both Workers and only that
+   chat is listened to from then on: `uv run pywrangler secret put TELEGRAM_CHAT_ID` in `worker/`
+   and `npx wrangler secret put TELEGRAM_CHAT_ID` in `front/`. To show the commands in Telegram's
+   menu:
+
+   ```sh
+   curl https://api.telegram.org/bot<TELEGRAM_TOKEN>/setMyCommands -H 'Content-Type: application/json' -d '{"commands": [
+     {"command": "now", "description": "a challenge right now"},
+     {"command": "session", "description": "log a training day"},
+     {"command": "today", "description": "today's sets, streak and skills"},
+     {"command": "stats", "description": "targets, ladders and the week's caps"},
+     {"command": "routine", "description": "your training days"},
+     {"command": "summary", "description": "today's summary"},
+     {"command": "help", "description": "what the bot can do"}]}'
+   ```
 6. On your desktop, add to `~/.config/rep/config.toml`:
 
    ```toml

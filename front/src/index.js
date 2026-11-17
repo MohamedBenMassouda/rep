@@ -36,12 +36,34 @@ function bearerToken(request) {
   return header.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : EMPTY_BODY;
 }
 
+function chatOf(update) {
+  const message = update.message || (update.callback_query && update.callback_query.message);
+
+  return message && message.chat ? String(message.chat.id) : EMPTY_BODY;
+}
+
+function fromAnotherChat(updateText, ownerChat) {
+  if (!ownerChat) {
+    return false;
+  }
+
+  try {
+    return chatOf(JSON.parse(updateText)) !== ownerChat;
+  } catch {
+    return true;
+  }
+}
+
 async function telegramUpdate(request, env, context) {
   if (!(await sameSecret(request.headers.get(TELEGRAM_SECRET_HEADER), env.TELEGRAM_WEBHOOK_SECRET))) {
     return new Response(EMPTY_BODY, { status: HTTP_UNAUTHORIZED });
   }
 
-  context.waitUntil(brainOf(env).telegram(await request.text()));
+  const updateText = await request.text();
+
+  if (!fromAnotherChat(updateText, env.TELEGRAM_CHAT_ID)) {
+    context.waitUntil(brainOf(env).telegram(updateText));
+  }
 
   return new Response(TELEGRAM_RECEIVED);
 }

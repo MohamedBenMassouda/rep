@@ -8,8 +8,10 @@ import zoneinfo
 from rep.app import ANSWERS, STAGE_RATE, App
 from rep.catalog import parse_pack
 from rep.notifiers import Card, OutboxNotifier, card_to_dict
-from rep.notifiers.telegram import (PHONE_COMMANDS, acknowledge, callback_arguments, clear_buttons, phone_buttons,
-                                    send_card, send_text)
+from rep.charts import phone_stats_text
+from rep.notifiers.telegram import (CALLBACK_SEPARATOR, PHONE_COMMANDS, acknowledge, callback_arguments, clear_buttons, phone_buttons,
+                                    routine_text, send_card, send_long_text, send_text, session_picker, today_text)
+from rep.routine import describe_sessions
 from rep.progression import RATINGS
 from rep.store import EVENT_SET, EVENT_TEST, empty_state
 
@@ -21,6 +23,7 @@ SETTING_BUSY = "busy"
 SETTING_PACK_DIGEST = "pack_digest"
 SETTING_TODAY = "today"
 SETTING_OPEN_MESSAGE = "open_message"
+SETTING_LAST_UPDATE = "last_telegram_update"
 DEFAULT_TIMEZONE = "UTC"
 BUSY_REPORT_FRESH_SECONDS = 600
 RECENT_HISTORY_DAYS = 7
@@ -33,6 +36,14 @@ COMMAND_SUMMARY = "summary"
 COMMAND_DISMISS = "dismiss"
 COMMAND_APPLY_TEST = "apply-test"
 TELEGRAM_NOW = "/now"
+TELEGRAM_SESSION = "/session"
+TELEGRAM_TODAY = "/today"
+TELEGRAM_STATS = "/stats"
+TELEGRAM_ROUTINE = "/routine"
+TELEGRAM_SUMMARY = "/summary"
+TELEGRAM_HELP_COMMANDS = ("/help", "/start")
+TELEGRAM_BOT_SUFFIX = "@"
+TELEGRAM_COMMAND_PREFIX = "/"
 DESKTOP_SYNC = "sync"
 DESKTOP_COMMAND = "command"
 DESKTOP_EXPORT = "export"
@@ -44,6 +55,8 @@ STATUS_UNKNOWN_CHAT = "unknown chat"
 STATUS_HELP = "help"
 STATUS_NOTHING_TO_RATE = "nothing to rate"
 STATUS_TYPED = "typed"
+STATUS_DUPLICATE = "duplicate update"
+STATUS_ANSWERED = "answered"
 ANSWER_ARGUMENT_COUNT = 3
 SINGLE_VALUE_ARGUMENT_COUNT = 2
 NO_LINE_COMMAND = ""
@@ -52,8 +65,19 @@ NOT_CONFIGURED = "not set up yet: run `rep tick` on your desktop once"
 IGNORED_ARGUMENTS = "ignored: those arguments don't make sense"
 NOTHING_TO_RATE = "No set is waiting for a rating right now."
 TYPED_REPS_REPLY = "Got {done}. Now tap how it felt on the card above."
-TELEGRAM_HELP = ("rep sends your challenge cards here. Tap the buttons to answer them. While a set waits for its "
-                 "rating, send the reps you did as a number. /now asks for a challenge right away.")
+TELEGRAM_HELP = "\n".join((
+    "rep sends your challenge cards here. Tap the buttons to answer them; while a set waits for its rating, "
+    "send the reps you did as a number first.",
+    "",
+    "/now: a challenge right now",
+    "/session: log a training day (or /session chest-day)",
+    "/today: today's sets, streak and skills",
+    "/stats: targets, ladders and the week's caps",
+    "/routine: your training days and their muscles",
+    "/summary: today's summary",
+    "",
+    "The max test, export and import stay on your desktop: rep test, rep export, rep import.",
+))
 TELEGRAM_UNKNOWN_CHAT = "This chat isn't linked to rep. Its chat id is {chat_id}: set it as TELEGRAM_CHAT_ID."
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -86,7 +110,7 @@ class SqlStore:
         return json.loads(text) if text is not None else None
 
     def put_setting(self, key, value):
-        text = json.dumps(value, sort_keys=True)
+        text = json.dumps(value)
 
         if self.setting_texts.get(key) == text:
             return
@@ -248,8 +272,8 @@ class Brain:
             text = app.answer(arguments[1], arguments[2])
         elif name == COMMAND_RATE and rate_arguments:
             text = app.rate(arguments[1], *rate_arguments)
-        elif name == COMMAND_SESSION and len(arguments) == SINGLE_VALUE_ARGUMENT_COUNT:
-            text = app.log_session(arguments[1])
+        elif name == COMMAND_SESSION and len(arguments) >= SINGLE_VALUE_ARGUMENT_COUNT:
+            text = app.log_session(CALLBACK_SEPARATOR.join(arguments[1:]))
         elif name == COMMAND_NOW:
             text = app.now()
         elif name == COMMAND_SUMMARY:
@@ -355,6 +379,9 @@ class Brain:
             return {**empty_outcome(STATUS_UNKNOWN_CHAT), "telegram": [send_text(chat_id, TELEGRAM_UNKNOWN_CHAT.format(
                 chat_id=chat_id))] if not self.chat_id else []}
 
+        if self.already_handled(update.get("update_id")):
+            return empty_outcome(STATUS_DUPLICATE)
+
         if callback:
             return self.telegram_button(callback)
 
@@ -373,13 +400,70 @@ class Brain:
 
         return outcome
 
+    def already_handled(self, update_id):
+        if not isinstance(update_id, int):
+            return False
+
+        if update_id <= (self.store.setting(SETTING_LAST_UPDATE) or 0):
+            return True
+
+        self.store.put_setting(SETTING_LAST_UPDATE, update_id)
+
+        return False
+
+    def reply(self, status, text):
+        return {**empty_outcome(status), "telegram": send_long_text(self.chat_id, text)}
+
     def telegram_text(self, text):
-        if text == TELEGRAM_NOW:
+        if text.isdigit():
+            return self.typed_reps(int(text))
+
+        command, _, argument = text.partition(CALLBACK_SEPARATOR)
+        command = command.split(TELEGRAM_BOT_SUFFIX, 1)[0].lower()
+
+        if command in TELEGRAM_HELP_COMMANDS or not command.startswith(TELEGRAM_COMMAND_PREFIX):
+            return self.reply(STATUS_HELP, TELEGRAM_HELP)
+
+        if not self.configured():
+            return self.reply(NOT_CONFIGURED, NOT_CONFIGURED)
+
+        if command == TELEGRAM_NOW:
             return self.command([COMMAND_NOW])
 
-        if not text.isdigit():
-            return {**empty_outcome(STATUS_HELP), "telegram": [send_text(self.chat_id, TELEGRAM_HELP)]}
+        if command == TELEGRAM_SESSION:
+            return self.telegram_session(argument.strip())
 
+        return self.telegram_report(command)
+
+    def telegram_session(self, session):
+        if session:
+            outcome = self.command([COMMAND_SESSION, session])
+
+            return outcome if outcome["telegram"] else self.reply(outcome["text"], outcome["text"])
+
+        allowances = self.build_app().config["training"]["session_allowances"]
+
+        return {**empty_outcome(STATUS_HELP), "telegram": [session_picker(self.chat_id, list(allowances))]}
+
+    def telegram_report(self, command):
+        app = self.build_app()
+        training = app.config["training"]
+
+        if command == TELEGRAM_TODAY:
+            return self.reply(STATUS_ANSWERED, today_text(self.today()))
+
+        if command == TELEGRAM_STATS:
+            return self.reply(STATUS_ANSWERED, phone_stats_text(app))
+
+        if command == TELEGRAM_ROUTINE:
+            return self.reply(STATUS_ANSWERED, routine_text(describe_sessions(training, training["session_allowances"])))
+
+        if command == TELEGRAM_SUMMARY:
+            return self.reply(STATUS_ANSWERED, "\n".join(app.summary_lines()))
+
+        return self.reply(STATUS_HELP, TELEGRAM_HELP)
+
+    def typed_reps(self, done):
         if not self.configured():
             return empty_outcome(NOT_CONFIGURED)
 
@@ -387,10 +471,9 @@ class Brain:
         pending = app.state["pending"]
 
         if not pending or pending["stage"] != STAGE_RATE:
-            return {**empty_outcome(STATUS_NOTHING_TO_RATE), "telegram": [send_text(self.chat_id, NOTHING_TO_RATE)]}
+            return self.reply(STATUS_NOTHING_TO_RATE, NOTHING_TO_RATE)
 
-        pending["typed"] = int(text)
+        pending["typed"] = done
         app.save()
-        reply = TYPED_REPS_REPLY.format(done=int(text))
 
-        return {**empty_outcome(STATUS_TYPED), "telegram": [send_text(self.chat_id, reply)]}
+        return self.reply(STATUS_TYPED, TYPED_REPS_REPLY.format(done=done))

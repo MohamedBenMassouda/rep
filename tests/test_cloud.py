@@ -6,7 +6,8 @@ from rep.app import ANSWER_DONE
 from rep.cloud import BUSY_REPORT_FRESH_SECONDS, DESKTOP_COMMAND, DESKTOP_SYNC, NOT_CONFIGURED, Brain, SqlStore
 from rep.notifiers.telegram import METHOD_CLEAR_BUTTONS, METHOD_SEND
 from rep.progression import RATING_STEADY
-from rep.store import EVENT_SET, EVENT_TEST, new_event
+from rep.notifiers.telegram import MESSAGE_LIMIT, split_message
+from rep.store import EVENT_SESSION, EVENT_SET, EVENT_TEST, new_event
 from rep.sync import pack_digest
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
 
@@ -14,6 +15,9 @@ OWNER_CHAT = "1001"
 STRANGER_CHAT = "2002"
 TYPED_REPS = 9
 TAPPED_MESSAGE = 55
+REPEATED_UPDATE = 500
+LONG_LINE_REPEATS = 50
+LONG_REPLY_LINES = 60
 TIMEZONE = "Africa/Tunis"
 MORNING_UTC = datetime.datetime(2026, 11, 18, 10, 0, tzinfo=datetime.timezone.utc)
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
@@ -56,14 +60,26 @@ class CloudTests(unittest.TestCase):
     def command(self, *arguments):
         return self.brain().command(list(arguments))
 
-    def tap(self, data, chat=OWNER_CHAT):
-        update = {"callback_query": {"id": "callback", "data": data,
+    def next_update(self):
+        self.update_id = getattr(self, "update_id", 0) + 1
+
+        return self.update_id
+
+    def tap(self, data, chat=OWNER_CHAT, update_id=None):
+        update = {"update_id": update_id or self.next_update(),
+                  "callback_query": {"id": "callback", "data": data,
                                      "message": {"message_id": TAPPED_MESSAGE, "chat": {"id": chat}}}}
 
         return self.brain().telegram(update)
 
     def send(self, text, chat=OWNER_CHAT):
-        return self.brain().telegram({"message": {"text": text, "chat": {"id": chat}}})
+        return self.brain().telegram({"update_id": self.next_update(), "message": {"text": text, "chat": {"id": chat}}})
+
+    def replies(self, outcome):
+        return "\n".join(call["payload"]["text"] for call in telegram_calls(outcome, METHOD_SEND))
+
+    def sessions_logged(self):
+        return [event["session"] for event in self.brain().export()["events"] if event["type"] == EVENT_SESSION]
 
     def test_the_cloud_does_nothing_until_the_desktop_has_sent_its_config(self):
         self.assertEqual(self.brain().tick()["text"], NOT_CONFIGURED)
@@ -149,6 +165,51 @@ class CloudTests(unittest.TestCase):
 
         self.assertIsNone(self.pending())
         self.assertIn(STRANGER_CHAT, telegram_calls(outcome, METHOD_SEND)[0]["payload"]["text"])
+
+    def test_session_without_a_day_offers_the_training_days_as_buttons(self):
+        self.sync()
+
+        outcome = self.send("/session")
+
+        picker = telegram_calls(outcome, METHOD_SEND)[0]["payload"]["reply_markup"]["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in picker for button in row]
+        self.assertEqual(callbacks, ["session upper", "session legs", "session full"])
+
+    def test_a_training_day_tapped_on_the_phone_is_logged_once_even_if_telegram_sends_it_twice(self):
+        self.sync()
+
+        self.tap("session upper", update_id=REPEATED_UPDATE)
+        self.tap("session upper", update_id=REPEATED_UPDATE)
+
+        self.assertEqual(self.sessions_logged(), ["upper"])
+
+    def test_session_with_a_day_logs_it_and_an_unknown_day_logs_nothing(self):
+        self.sync()
+
+        self.send("/session legs")
+        unknown = self.send("/session leg-day")
+
+        self.assertEqual(self.sessions_logged(), ["legs"])
+        self.assertIn("unknown session", self.replies(unknown))
+
+    def test_stats_and_today_come_back_as_plain_text(self):
+        self.sync()
+        self.send("/session upper")
+
+        stats = self.replies(self.send("/stats"))
+        today = self.replies(self.send("/today@rep_bot"))
+
+        self.assertIn("Streak", stats)
+        self.assertNotIn("\033", stats)
+        self.assertIn("Trained: upper", today)
+
+    def test_long_replies_are_split_to_fit_a_telegram_message(self):
+        text = "\n".join("line" * LONG_LINE_REPEATS for _ in range(LONG_REPLY_LINES))
+
+        chunks = split_message(text)
+
+        self.assertTrue(all(len(chunk) <= MESSAGE_LIMIT for chunk in chunks))
+        self.assertEqual("\n".join(chunks), text)
 
     def test_a_fresh_busy_report_holds_challenges_back_and_a_stale_one_does_not(self):
         self.sync()

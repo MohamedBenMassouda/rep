@@ -155,6 +155,11 @@ its state transition runs again from the top:
   spaces as `callback_data` (64 bytes at most); the phone only offers `answer`, `rate` and `dismiss`.
 - **Reps typed in Telegram** wait in `pending["typed"]` until the rating; `App.rate()` uses them when
   the button carries no reps.
+- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/help`)
+  answer in plain text, never `parse_mode`, and are split at `MESSAGE_LIMIT`. Stats for the phone
+  come from `charts.phone_stats_text()`, which shares its rows with the terminal's `stats_text()`.
+- **Settings keep their key order.** `put_setting()` must not sort keys: the routine's order is
+  the order of your training days.
 - **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained`,
   `sessions` (day name → muscles text) and `skills`. The `rep` script enters through
   `rep.launcher`: with sync on, `rep today` prints the `today.json` that every sync writes, after
@@ -192,8 +197,10 @@ its state transition runs again from the top:
   answers `needs_pack` before running anything, so the resend never runs a command twice.
   `today` is cached under a marker of the state, config, date and `MAX(rowid)` of events; never
   use `COUNT(*)` for such checks (Durable Objects bill rows read).
-- `rep-api` holds `DESKTOP_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` and answers Telegram at once
-  (`waitUntil`), so a slow update never makes Telegram retry. The Python Worker holds
+- `rep-api` holds `DESKTOP_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TELEGRAM_CHAT_ID`, drops updates
+  from other chats before they reach the Durable Object, and answers Telegram at once
+  (`waitUntil`), so a slow update never makes Telegram retry. The Durable Object also records the
+  last `update_id` and ignores anything at or below it, so a redelivered update never logs twice. The Python Worker holds
   `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID`, sends the Telegram calls the `Brain` returns, has no
   public URL (`workers_dev: false`) and is reached only through the Durable Object binding. Only
   the configured chat is obeyed; the desktop's `[sync]` section never leaves the desktop.
