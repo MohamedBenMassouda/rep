@@ -57,21 +57,21 @@ and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE
 
 ### Shell completion
 
+Each file below asks the installed `rep` for its script the first time you complete `rep` in a
+shell, so completions follow updates on their own.
+
 ```sh
 # zsh: a folder on your fpath (add it before compinit in ~/.zshrc if it isn't)
 mkdir -p ~/.local/share/zsh/site-functions
-rep completion zsh > ~/.local/share/zsh/site-functions/_rep
-# or, simpler but slower to start: eval "$(rep completion zsh)" after compinit
+printf '#compdef rep\neval "$(rep completion zsh)"\n' > ~/.local/share/zsh/site-functions/_rep
 
 # bash
 mkdir -p ~/.local/share/bash-completion/completions
-rep completion bash > ~/.local/share/bash-completion/completions/rep
+echo 'eval "$(rep completion bash)"' > ~/.local/share/bash-completion/completions/rep
 
 # fish
-rep completion fish > ~/.config/fish/completions/rep.fish
+echo 'rep completion fish | source' > ~/.config/fish/completions/rep.fish
 ```
-
-Re-run it after updating rep so new commands show up.
 
 ## Your routine
 
