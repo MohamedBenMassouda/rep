@@ -11,6 +11,7 @@ from rep.sync import (CARD_FRESH_SECONDS, USER_AGENT, SyncClient, desktop_comman
                       sync_request, write_sync_state)
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
 
+OWNER_CHAT = "1001"
 TOKEN = "desktop-secret"
 CLOUD_URL = "https://rep.example"
 MORNING_UTC = datetime.datetime(2026, 11, 18, 10, 0, tzinfo=datetime.timezone.utc)
@@ -45,7 +46,7 @@ class SyncTests(unittest.TestCase):
         self.directory.cleanup()
 
     def brain(self):
-        return Brain(SqlStore(self.execute), clock=lambda: self.moment, chooser=seeded_random())
+        return Brain(SqlStore(self.execute), OWNER_CHAT, clock=lambda: self.moment, chooser=seeded_random())
 
     def post(self, url, body, token):
         self.calls += 1
@@ -53,7 +54,7 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(token, TOKEN)
         action = url.rsplit("/", 1)[1]
 
-        return json.loads(json.dumps(self.brain().desktop(action, json.loads(json.dumps(body)))))
+        return json.loads(json.dumps(self.brain().desktop(action, json.loads(json.dumps(body)))["response"]))
 
     def config(self):
         return config_with(conditions=NO_CHECKS, sync={"url": CLOUD_URL, "token": TOKEN})

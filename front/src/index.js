@@ -1,5 +1,8 @@
 const BRAIN_NAME = "owner";
 const DESKTOP_ROUTE_PREFIX = "/desktop/";
+const TELEGRAM_ROUTE = "/telegram";
+const TELEGRAM_SECRET_HEADER = "X-Telegram-Bot-Api-Secret-Token";
+const TELEGRAM_RECEIVED = "ok";
 const AUTHORIZATION_HEADER = "Authorization";
 const BEARER_PREFIX = "Bearer ";
 const METHOD_POST = "POST";
@@ -33,9 +36,23 @@ function bearerToken(request) {
   return header.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : EMPTY_BODY;
 }
 
+async function telegramUpdate(request, env, context) {
+  if (!(await sameSecret(request.headers.get(TELEGRAM_SECRET_HEADER), env.TELEGRAM_WEBHOOK_SECRET))) {
+    return new Response(EMPTY_BODY, { status: HTTP_UNAUTHORIZED });
+  }
+
+  context.waitUntil(brainOf(env).telegram(await request.text()));
+
+  return new Response(TELEGRAM_RECEIVED);
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, context) {
     const path = new URL(request.url).pathname;
+
+    if (request.method === METHOD_POST && path === TELEGRAM_ROUTE) {
+      return telegramUpdate(request, env, context);
+    }
 
     if (request.method !== METHOD_POST || !path.startsWith(DESKTOP_ROUTE_PREFIX)) {
       return new Response(EMPTY_BODY, { status: HTTP_NOT_FOUND });

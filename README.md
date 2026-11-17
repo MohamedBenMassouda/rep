@@ -22,8 +22,8 @@ pull-up. You answer from the notification, and your targets move with you.
   you name (e.g. a focus timer or the lock screen).
 - **Works on any Linux desktop:** standard notifications with buttons, a
   [Quickshell](https://quickshell.org) flyout when available, or the terminal.
-- **In the cloud too (optional):** a free Cloudflare Worker runs the schedule and keeps your
-  history, while your desktop keeps showing the cards and reporting when you're busy.
+- **On your phone too (optional):** free Cloudflare Workers run the schedule and send every
+  card to Telegram, while your desktop keeps showing them and reporting when you're busy.
 
 ## Install
 
@@ -121,30 +121,46 @@ State lives in `~/.local/state/rep/`: `state.json` (targets, ladder positions, t
 challenge) and `events.jsonl` (every set, skip, session and max test). Nothing leaves your computer
 unless you set up the cloud below.
 
-## Cloud (optional)
+## Phone and cloud (optional)
 
-A Cloudflare Worker (free plan) becomes the one place that decides when a card is due and keeps
-your history. Your desktop's `rep tick` keeps running: it sends your config and whether you're busy
-(mic, screen share, pause files) to the Worker, shows the cards it produced in your flyout, and
-forwards your answers.
+Two Cloudflare Workers (free plan) become the one place that decides when a card is due and keeps
+your history. They send each card to a Telegram bot, so cards reach your phone with your desktop
+off. Your desktop's `rep tick` keeps running: it sends your config and whether you're busy (mic,
+screen share, pause files), shows the same cards in your flyout, and forwards your answers. Answer
+wherever you are: the other side catches up within one tick.
+
+In Telegram, tap the buttons as usual. While a set waits for its rating, send the reps you did as a
+number before tapping how it felt. `/now` asks for a challenge right away.
 
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
-1. Make a random secret for your desktop: `openssl rand -hex 32`.
-2. Deploy the two Workers (the Python one holding your data first) and give the front the secret:
+1. In Telegram, talk to [@BotFather](https://t.me/BotFather), send `/newbot` and keep the token.
+2. Make two random secrets, one for your desktop and one for Telegram: `openssl rand -hex 32` twice.
+3. Deploy the two Workers (the Python one holding your data first) and give them the secrets:
 
    ```sh
    cd worker
    uv sync
    uv run pywrangler login
    uv run pywrangler deploy
+   uv run pywrangler secret put TELEGRAM_TOKEN
    cd ../front
    npx wrangler deploy
    npx wrangler secret put DESKTOP_TOKEN
+   npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
    ```
 
    The second `deploy` prints the address, `https://rep-api.<your-subdomain>.workers.dev`.
-3. On your desktop, add to `~/.config/rep/config.toml`:
+4. Point the bot at it:
+
+   ```sh
+   curl https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook \
+     -d url=https://rep-api.<your-subdomain>.workers.dev/telegram -d secret_token=<TELEGRAM_WEBHOOK_SECRET>
+   ```
+
+5. Send your bot any message. It answers with your chat id; store it on the Python Worker and only
+   that chat is listened to from then on: `cd worker && uv run pywrangler secret put TELEGRAM_CHAT_ID`.
+6. On your desktop, add to `~/.config/rep/config.toml`:
 
    ```toml
    [sync]

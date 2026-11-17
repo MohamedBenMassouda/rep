@@ -210,6 +210,7 @@ class App:
             return "ignored: that challenge was already rated"
 
         exercise_identifier = pending["exercise"]
+        done = pending.get("typed") if done is None else done
         target_before = target_of(self.state, self.pack, exercise_identifier, self.scale)
         unlocked = apply_rating(self.state, self.pack, exercise_identifier, rating, self.scale, done)
         amount = target_before if done is None else done

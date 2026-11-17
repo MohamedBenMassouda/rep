@@ -4,16 +4,25 @@ import zoneinfo
 
 from rep.app import ANSWER_DONE
 from rep.cloud import BUSY_REPORT_FRESH_SECONDS, DESKTOP_COMMAND, DESKTOP_SYNC, NOT_CONFIGURED, Brain, SqlStore
+from rep.notifiers.telegram import METHOD_CLEAR_BUTTONS, METHOD_SEND
 from rep.progression import RATING_STEADY
 from rep.store import EVENT_SET, EVENT_TEST, new_event
 from rep.sync import pack_digest
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
 
+OWNER_CHAT = "1001"
+STRANGER_CHAT = "2002"
+TYPED_REPS = 9
+TAPPED_MESSAGE = 55
 TIMEZONE = "Africa/Tunis"
 MORNING_UTC = datetime.datetime(2026, 11, 18, 10, 0, tzinfo=datetime.timezone.utc)
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
 LONG_STREAK_DAYS = 12
 ONLY_THE_BUSY_REPORT = 1
+
+
+def telegram_calls(outcome, method):
+    return [call for call in outcome["telegram"] if call["method"] == method]
 
 
 def unbuildable_app():
@@ -30,7 +39,7 @@ class CloudTests(unittest.TestCase):
         self.moment = MORNING_UTC
 
     def brain(self):
-        return Brain(SqlStore(self.execute), clock=lambda: self.moment, chooser=seeded_random())
+        return Brain(SqlStore(self.execute), OWNER_CHAT, clock=lambda: self.moment, chooser=seeded_random())
 
     def sync_report(self, busy=None, cursor=None):
         pack = default_pack_raw()
@@ -39,13 +48,22 @@ class CloudTests(unittest.TestCase):
                 "timezone": TIMEZONE, "busy": busy, "cursor": cursor}
 
     def sync(self, busy=None, cursor=None):
-        return self.brain().desktop(DESKTOP_SYNC, {"report": self.sync_report(busy, cursor)})
+        return self.brain().desktop(DESKTOP_SYNC, {"report": self.sync_report(busy, cursor)})["response"]
 
     def pending(self):
         return self.brain().store.load_state()["pending"]
 
     def command(self, *arguments):
         return self.brain().command(list(arguments))
+
+    def tap(self, data, chat=OWNER_CHAT):
+        update = {"callback_query": {"id": "callback", "data": data,
+                                     "message": {"message_id": TAPPED_MESSAGE, "chat": {"id": chat}}}}
+
+        return self.brain().telegram(update)
+
+    def send(self, text, chat=OWNER_CHAT):
+        return self.brain().telegram({"message": {"text": text, "chat": {"id": chat}}})
 
     def test_the_cloud_does_nothing_until_the_desktop_has_sent_its_config(self):
         self.assertEqual(self.brain().tick()["text"], NOT_CONFIGURED)
@@ -81,6 +99,56 @@ class CloudTests(unittest.TestCase):
         outcome = self.command("rate", "token", "seven")
 
         self.assertTrue(outcome["text"].startswith("ignored"))
+
+    def test_a_challenge_goes_to_telegram_with_answer_buttons(self):
+        self.sync()
+
+        outcome = self.command("now")
+
+        token = self.pending()["token"]
+        sent = telegram_calls(outcome, METHOD_SEND)[0]["payload"]
+        callbacks = [button["callback_data"] for button in sent["reply_markup"]["inline_keyboard"][0]]
+        self.assertIn(f"answer {token} {ANSWER_DONE}", callbacks)
+
+    def test_tapping_done_on_the_phone_moves_to_the_rating_and_clears_the_tapped_buttons(self):
+        self.sync()
+        self.command("now")
+        token = self.pending()["token"]
+
+        outcome = self.tap(f"answer {token} {ANSWER_DONE}")
+
+        self.assertEqual(self.pending()["stage"], "rate")
+        cleared = [call["payload"]["message_id"] for call in telegram_calls(outcome, METHOD_CLEAR_BUTTONS)]
+        self.assertIn(TAPPED_MESSAGE, cleared)
+
+    def test_a_number_sent_during_the_rating_becomes_the_reps_done(self):
+        self.sync()
+        self.command("now")
+        token = self.pending()["token"]
+        self.tap(f"answer {token} {ANSWER_DONE}")
+
+        self.send(str(TYPED_REPS))
+        self.tap(f"rate {token} {RATING_STEADY}")
+
+        sets = [event for event in self.brain().export()["events"] if event["type"] == EVENT_SET]
+        self.assertEqual([event["amount"] for event in sets], [TYPED_REPS])
+
+    def test_a_message_from_another_chat_changes_nothing(self):
+        self.sync()
+
+        outcome = self.send("/now", chat=STRANGER_CHAT)
+
+        self.assertIsNone(self.pending())
+        self.assertEqual(outcome["telegram"], [])
+
+    def test_without_a_linked_chat_the_bot_only_tells_a_stranger_its_chat_id(self):
+        self.sync()
+        unlinked = Brain(SqlStore(self.execute), None, clock=lambda: self.moment)
+
+        outcome = unlinked.telegram({"message": {"text": "/now", "chat": {"id": STRANGER_CHAT}}})
+
+        self.assertIsNone(self.pending())
+        self.assertIn(STRANGER_CHAT, telegram_calls(outcome, METHOD_SEND)[0]["payload"]["text"])
 
     def test_a_fresh_busy_report_holds_challenges_back_and_a_stale_one_does_not(self):
         self.sync()

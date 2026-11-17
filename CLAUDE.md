@@ -9,7 +9,7 @@ an exercise pack (JSON), a TOML config, `state.json` + `events.jsonl` in `~/.loc
 and pluggable notifiers (Quickshell flyout over IPC, desktop notifications via `notify-send`, terminal).
 Optionally two Cloudflare Workers take over deciding: `front/` (JavaScript, `rep-api`) owns the cron
 and the public routes, and `worker/` (Python, `rep`) holds the Durable Object that keeps state in a
-Durable Object's SQLite, and the desktop syncs with it (see "Cloud sync").
+Durable Object's SQLite, sends cards to Telegram, and the desktop syncs with it (see "Cloud sync").
 
 One Python package, `src/rep`, stdlib only (Python 3.11+, `tomllib`), built with hatchling and
 installed with `uv tool install` or `pipx`. Tests are in `tests/` (`unittest`). There is no
@@ -32,7 +32,7 @@ From the repository root:
 | `XDG_CONFIG_HOME=<scratch>/config XDG_STATE_HOME=<scratch>/state PYTHONPATH=src python3 -m rep …` | the whole tool against throwaway config and state (`init`, `test`, `now`, `answer`, `rate`, `stats --history`, `export`, `import`). Set `notifier = "terminal"` so cards print |
 | `uv tool install --force .`                                  | install the working copy as `rep`                             |
 | `rep now`                                                    | manual smoke rig. Shows a **real** card on your desktop and writes **real** state, never in CI |
-| `cd worker && uv run pywrangler sync && npx wrangler dev -c ../front/wrangler.jsonc -c wrangler.jsonc --test-scheduled` | both Workers locally (secrets from `front/.dev.vars`); `curl "localhost:8787/cdn-cgi/handler/scheduled"` runs a tick |
+| `cd worker && uv run pywrangler sync && npx wrangler dev -c ../front/wrangler.jsonc -c wrangler.jsonc --test-scheduled` | both Workers locally (secrets from `front/.dev.vars` and `worker/.dev.vars`); `curl "localhost:8787/cdn-cgi/handler/scheduled"` runs a tick |
 
 CI (`.github/workflows/tests.yml`) runs the unittest suite on Python 3.11, 3.12, 3.13 and 3.14.
 That job is the only check. Nothing lints or type-checks: hold the code style below yourself.
@@ -151,7 +151,10 @@ its state transition runs again from the top:
   state and events in the same change.
 - **The button argv is an interface.** Notifiers run `rep answer <token> done|skip|later`,
   `rep rate <token> 3|1|0 [reps done]`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
-  through the hidden `rep await-notification <json>`.
+  through the hidden `rep await-notification <json>`. Telegram carries the same arguments joined by
+  spaces as `callback_data` (64 bytes at most); the phone only offers `answer`, `rate` and `dismiss`.
+- **Reps typed in Telegram** wait in `pending["typed"]` until the rating; `App.rate()` uses them when
+  the button carries no reps.
 - **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained`,
   `sessions` (day name → muscles text) and `skills`. The `rep` script enters through
   `rep.launcher`: with sync on, `rep today` prints the `today.json` that every sync writes, after
@@ -189,9 +192,11 @@ its state transition runs again from the top:
   answers `needs_pack` before running anything, so the resend never runs a command twice.
   `today` is cached under a marker of the state, config, date and `MAX(rowid)` of events; never
   use `COUNT(*)` for such checks (Durable Objects bill rows read).
-- `rep-api` holds the one secret, `DESKTOP_TOKEN`; the Python Worker has no public URL
-  (`workers_dev: false`) and is reached only through the Durable Object binding. The desktop's
-  `[sync]` section never leaves the desktop.
+- `rep-api` holds `DESKTOP_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` and answers Telegram at once
+  (`waitUntil`), so a slow update never makes Telegram retry. The Python Worker holds
+  `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID`, sends the Telegram calls the `Brain` returns, has no
+  public URL (`workers_dev: false`) and is reached only through the Durable Object binding. Only
+  the configured chat is obeyed; the desktop's `[sync]` section never leaves the desktop.
 
 ### Results, retries, errors
 
