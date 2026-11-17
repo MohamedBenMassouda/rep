@@ -37,6 +37,7 @@ DEFAULTS = {
     "nudges": {"protein": "20:00", "bedtime": "23:30", "summary": "22:00"},
     "display": {"notifier": "auto", "quickshell_kind": "workout", "line_command": ""},
     "conditions": {"pause_files": [], "check_microphone": True, "check_screen_share": True},
+    "sync": {"url": "", "token": ""},
 }
 
 

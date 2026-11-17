@@ -1,3 +1,3 @@
-from rep.cli import main
+from rep.launcher import main
 
 main()

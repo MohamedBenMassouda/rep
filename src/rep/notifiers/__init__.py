@@ -23,6 +23,34 @@ class Card:
     done_prompt: int | None = None
 
 
+def card_to_dict(card):
+    return {
+        "title": card.title,
+        "body": card.body,
+        "sticky": card.sticky,
+        "buttons": [{"label": button.label, "glyph": button.glyph, "arguments": list(button.arguments)}
+                    for button in card.buttons],
+        "done_prompt": card.done_prompt,
+    }
+
+
+def card_from_dict(fields):
+    buttons = tuple(Button(button["label"], button["glyph"], tuple(button["arguments"])) for button in fields["buttons"])
+
+    return Card(fields["title"], fields["body"], fields["sticky"], buttons, fields.get("done_prompt"))
+
+
+class OutboxNotifier:
+    def __init__(self):
+        self.cards = []
+
+    def show(self, card):
+        self.cards.append(card)
+
+    def dismiss(self):
+        pass
+
+
 def rep_command():
     installed = shutil.which("rep")
 

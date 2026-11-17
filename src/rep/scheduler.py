@@ -42,6 +42,13 @@ def last_test_day(events):
     return datetime.date.fromisoformat(max(test_days)) if test_days else None
 
 
+def retest_due(state, events, today, retest_days):
+    stored_day = state.get("last_test_day")
+    last_test = datetime.date.fromisoformat(stored_day) if stored_day else last_test_day(events)
+
+    return last_test is None or (today - last_test).days >= retest_days
+
+
 def within_active_hours(now, schedule):
     return schedule["start_hour"] <= now.hour < schedule["end_hour"]
 
@@ -61,10 +68,7 @@ def decide(now, state, config, pack, events, busy_reason, chooser):
     if not within_active_hours(now, schedule):
         return None
 
-    last_test = last_test_day(events)
-    retest_due = last_test is None or (today - last_test).days >= config["training"]["retest_days"]
-
-    if retest_due and not stamped_today(state, STAMP_RETEST, today):
+    if not stamped_today(state, STAMP_RETEST, today) and retest_due(state, events, today, config["training"]["retest_days"]):
         return Decision(ACTION_RETEST)
 
     if not state["next_due"]:

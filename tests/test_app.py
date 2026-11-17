@@ -5,7 +5,7 @@ from pathlib import Path
 from rep.app import ANSWER_DONE, ANSWER_LATER, ANSWER_SKIP, App
 from rep.paths import Paths
 from rep.progression import RATING_EASY, Challenge, KIND_HARD, target_of
-from rep.store import EVENT_SESSION, EVENT_SET, EVENT_SKIP, load_events
+from rep.store import EVENT_SESSION, EVENT_SET, EVENT_SKIP, FileStore, load_events
 from tests.helpers import FIXED_NOW, config_with, default_pack, seeded_random
 
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
@@ -36,7 +36,7 @@ class AppTests(unittest.TestCase):
         config = config_with(conditions=NO_CHECKS, display={"notifier": "terminal", "quickshell_kind": "workout",
                                                              "line_command": ""})
 
-        return App(self.paths, config, default_pack(), self.notifier, seeded_random(), clock=lambda: FIXED_NOW)
+        return App(FileStore(self.paths), config, default_pack(), self.notifier, seeded_random(), clock=lambda: FIXED_NOW)
 
     def token(self):
         return self.app.state["pending"]["token"]
@@ -105,7 +105,7 @@ class AppTests(unittest.TestCase):
 
     def test_a_routine_replaces_the_built_in_sessions(self):
         config = config_with(conditions=NO_CHECKS, training={"routine": {"push": ["chest", "biceps"]}})
-        app = App(self.paths, config, default_pack(), self.notifier, seeded_random(), clock=lambda: FIXED_NOW)
+        app = App(FileStore(self.paths), config, default_pack(), self.notifier, seeded_random(), clock=lambda: FIXED_NOW)
 
         self.assertEqual(app.log_session("push"), "logged")
         self.assertTrue(app.log_session("upper").startswith("unknown"))

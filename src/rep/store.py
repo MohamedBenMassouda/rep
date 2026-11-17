@@ -2,6 +2,7 @@ import datetime
 import json
 import time
 import uuid
+from collections.abc import Sequence
 
 STATE_VERSION = 1
 EVENT_SET = "set"
@@ -21,6 +22,7 @@ def empty_state():
         "next_due": 0,
         "last_group": None,
         "stamps": {},
+        "last_test_day": None,
     }
 
 
@@ -83,6 +85,86 @@ def load_events(paths):
             continue
 
     return events
+
+
+class EventLog(Sequence):
+    def __init__(self, load):
+        self.load, self.loaded = load, None
+
+    def records(self):
+        if self.loaded is None:
+            self.loaded = self.load()
+
+        return self.loaded
+
+    def __getitem__(self, index):
+        return self.records()[index]
+
+    def __len__(self):
+        return len(self.records())
+
+    def __iter__(self):
+        return iter(self.records())
+
+    def append(self, event):
+        if self.loaded is not None:
+            self.loaded.append(event)
+
+
+def completed_counts(events):
+    counts = {}
+
+    for event in events:
+
+        if event["type"] == EVENT_SET:
+            counts[event["day"]] = counts.get(event["day"], 0) + 1
+
+    return counts
+
+
+class FileStore:
+    def __init__(self, paths):
+        self.paths = paths
+
+    def completed_counts(self):
+        return completed_counts(self.load_events())
+
+    def load_state(self):
+        return load_state(self.paths)
+
+    def save_state(self, state):
+        save_state(self.paths, state)
+
+    def load_events(self):
+        return load_events(self.paths)
+
+    def append_event(self, event):
+        return append_event(self.paths, event)
+
+
+class MemoryStore:
+    def __init__(self, state, events):
+        self.state, self.events = state, list(events)
+
+    def completed_counts(self):
+        return completed_counts(self.events)
+
+    def load_state(self):
+        loaded = empty_state()
+        loaded.update({key: value for key, value in self.state.items() if key in loaded})
+
+        return loaded
+
+    def save_state(self, state):
+        self.state = state
+
+    def load_events(self):
+        return list(self.events)
+
+    def append_event(self, event):
+        self.events.append(event)
+
+        return event
 
 
 def write_events(paths, events):

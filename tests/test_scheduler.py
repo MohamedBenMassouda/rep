@@ -11,6 +11,11 @@ NO_NUDGES = {"protein": "off", "bedtime": "off", "summary": "off"}
 MINUTES_BEFORE_REMINDER = 5
 
 
+class UnreadableHistory:
+    def __iter__(self):
+        raise AssertionError("the history was read")
+
+
 class SchedulerTests(unittest.TestCase):
     def setUp(self):
         self.pack = default_pack()
@@ -21,6 +26,13 @@ class SchedulerTests(unittest.TestCase):
 
     def decide(self, now=FIXED_NOW, busy=None):
         return decide(now, self.state, self.config, self.pack, self.events, busy, seeded_random())
+
+    def test_a_recent_test_day_kept_in_the_state_skips_the_retest_without_reading_history(self):
+        del self.state["stamps"][STAMP_RETEST]
+        self.state["last_test_day"] = FIXED_NOW.date().isoformat()
+        self.events = UnreadableHistory()
+
+        self.assertEqual(self.decide().action, ACTION_SCHEDULE_FIRST)
 
     def test_the_first_tick_only_schedules_the_first_challenge(self):
         self.assertEqual(self.decide().action, ACTION_SCHEDULE_FIRST)

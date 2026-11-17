@@ -22,6 +22,9 @@ class DesktopNotifier:
         subprocess.Popen(rep_command() + [AWAIT_SUBCOMMAND, payload], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+    def dismiss(self):
+        pass
+
     def send(self, card, wait):
         command = ["notify-send", "--app-name", APPLICATION_NAME,
                    "--urgency", STICKY_URGENCY if card.sticky else NORMAL_URGENCY]

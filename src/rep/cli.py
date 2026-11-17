@@ -7,25 +7,35 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from rep.app import ANSWERS, App
-from rep.backup import FORMAT_JSON, FORMATS, export_text, import_backup
+from rep.backup import FORMAT_JSON, FORMATS, export_records, export_text, import_backup
 from rep.catalog import DEFAULT_PACK_RESOURCE, PackError, load_pack
 from rep.charts import stats_text
 from rep.completion import COMPLETION_COMMAND, SHELLS, completion_script
 from rep.config import DEFAULTS, ConfigMissing, load_config, merge, save_config
-from rep.maxtest import run_test
+from rep.conditions import busy_reason
+from rep.maxtest import ask_test, run_test
 from rep.notifiers import Card, make_notifier, rep_command
 from rep.notifiers.desktop import AWAIT_SUBCOMMAND, await_notification
 from rep.paths import default_paths
-from rep.progression import RATINGS, choose_challenge
+from rep.progression import RATINGS
 from rep.routine import RoutineError, describe_sessions
+from rep.store import FileStore, MemoryStore, empty_state, load_events, load_state
+from rep.cloud import DESKTOP_EXPORT, DESKTOP_IMPORT
+from rep.launcher import cached_today
+from rep.sync import SyncError, client_for, desktop_command, desktop_tick
 from rep.timer import install_timer, uninstall_timer
 from rep.wizard import run_wizard
 
 TERMINALS = ("kitty", "foot", "alacritty", "wezterm", "gnome-terminal", "konsole", "xterm")
 EXIT_PROBLEM = 1
+
+
+SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "session", "summary", "dismiss", "test", "today", "stats",
+                   "routine", "export", "import", "sync-upload")
 
 
 def pack_for(config):
@@ -34,10 +44,106 @@ def pack_for(config):
     return load_pack(os.path.expanduser(pack_file) if pack_file else None)
 
 
+def pack_raw_for(config):
+    pack_file = config["training"]["pack_file"]
+
+    return json.loads(Path(os.path.expanduser(pack_file)).read_text() if pack_file else load_pack_text())
+
+
+def synced_config(paths, command):
+    if command not in SYNCED_COMMANDS or not paths.config_file.exists():
+        return None
+
+    config = load_config(paths)
+
+    return config if config["sync"]["url"] else None
+
+
+def forwarded_arguments(arguments):
+    command = arguments.command
+
+    if command == "answer":
+        return [command, arguments.token, arguments.answer]
+
+    if command == "rate":
+        done = [] if arguments.done is None else [str(arguments.done)]
+
+        return [command, arguments.token, str(arguments.rating)] + done
+
+    if command == "session":
+        return [command, arguments.kind]
+
+    return [command]
+
+
+def cloud_app(client, config):
+    backup = client.call(DESKTOP_EXPORT)
+
+    return App(MemoryStore(backup["state"], backup["events"]), config, pack_for(config),
+               make_notifier(config["display"]), random.Random())
+
+
+def sync_tick(client, paths, config):
+    return desktop_tick(client, paths, config, pack_raw_for(config), make_notifier(config["display"]),
+                        busy_reason(config["conditions"]), int(time.time()))
+
+
+def sync_command(client, paths, config, forwarded):
+    return desktop_command(client, paths, config, pack_raw_for(config), make_notifier(config["display"]),
+                           busy_reason(config["conditions"]), int(time.time()), forwarded)
+
+
+def local_app(config):
+    return App(MemoryStore(empty_state(), []), config, pack_for(config), make_notifier(config["display"]),
+               random.Random())
+
+
+def dispatch_synced(paths, config, arguments):
+    client = client_for(config)
+    command = arguments.command
+
+    if command == "tick":
+        print(sync_tick(client, paths, config))
+    elif command == "today":
+        cached = cached_today(paths)
+
+        if cached is None:
+            sync_tick(client, paths, config)
+            cached = cached_today(paths)
+
+        print(cached)
+    elif command == "routine":
+        command_routine(local_app(config), arguments)
+    elif command in ("stats", "export"):
+        dispatch_read(cloud_app(client, config), arguments)
+    elif command == "import":
+        backup = json.loads(Path(arguments.file).read_text())
+        records = {"events": backup.get("events", []), "state": backup.get("state") if arguments.with_state else None}
+        print(f"Imported {client.call(DESKTOP_IMPORT, records)['added']} new events.")
+    elif command == "sync-upload":
+        records = {"events": load_events(paths), "state": load_state(paths)}
+        print(f"Uploaded {client.call(DESKTOP_IMPORT, records)['added']} new events and your targets and ladders.")
+    else:
+        forwarded = forwarded_arguments(arguments)
+
+        if command == "test":
+            results, skill_steps = ask_test(cloud_app(client, config))
+            forwarded = ["apply-test", json.dumps({"results": results, "skill_steps": skill_steps})]
+
+        print(sync_command(client, paths, config, forwarded))
+
+
+def dispatch_read(app, arguments):
+    if arguments.command == "stats":
+        print(stats_text(app, with_history=arguments.history))
+    else:
+        write_export(export_records(app.state, list(app.events), arguments.format), arguments)
+
+
 def build_app(paths):
     config = load_config(paths)
 
-    return App(paths, config, pack_for(config), make_notifier(config["display"]), random.Random())
+    return App(FileStore(paths), config, pack_for(config), make_notifier(config["display"]), random.Random())
 
 
 def command_init(paths, arguments):
@@ -54,22 +160,7 @@ def command_init(paths, arguments):
 
 
 def command_now(paths, arguments):
-    app = build_app(paths)
-
-    if app.state.get("pending"):
-        app.show_pending()
-
-        return
-
-    challenge = choose_challenge(app.state, app.pack, app.config["training"], app.config["profile"]["skills"],
-                                 app.events, app.clock(), app.chooser)
-
-    if challenge is None:
-        print("Nothing to offer: every weekly cap is full and no skills are chosen.")
-
-        return
-
-    app.start_challenge(challenge)
+    print(build_app(paths).now())
 
 
 def open_in_terminal(command):
@@ -86,8 +177,10 @@ def open_in_terminal(command):
 
 
 def command_export(paths, arguments):
-    text = export_text(paths, arguments.format)
+    write_export(export_text(paths, arguments.format), arguments)
 
+
+def write_export(text, arguments):
     if arguments.output:
         Path(arguments.output).write_text(text)
         print(f"Exported to {arguments.output}.")
@@ -164,6 +257,7 @@ def parser():
     completion = commands.add_parser("completion", help="print a shell completion script")
     completion.add_argument("shell", choices=SHELLS)
     commands.add_parser("dismiss")
+    commands.add_parser("sync-upload", help="copy this computer's history and targets to the cloud (once)")
     waiting = commands.add_parser(AWAIT_SUBCOMMAND)
     waiting.add_argument("payload")
 
@@ -172,6 +266,12 @@ def parser():
 
 def dispatch(paths, arguments):
     command = arguments.command
+    config = synced_config(paths, command)
+
+    if config:
+        dispatch_synced(paths, config, arguments)
+
+        return
     simple = {
         "init": command_init,
         "now": command_now,
@@ -211,6 +311,9 @@ def dispatch(paths, arguments):
         print(completion_script(parser(), arguments.shell), end="")
     elif command == AWAIT_SUBCOMMAND:
         await_notification(arguments.payload)
+    elif command == "sync-upload":
+        print("Sync isn't set up: add url and token under [sync] in your config first.", file=sys.stderr)
+        sys.exit(EXIT_PROBLEM)
 
 
 def main(argv=None):
@@ -229,3 +332,8 @@ def main(argv=None):
     except PackError as problem:
         print(f"Exercise pack problem: {problem}", file=sys.stderr)
         sys.exit(EXIT_PROBLEM)
+    except SyncError as problem:
+        print(f"Sync problem: {problem}", file=sys.stderr)
+
+        if arguments.command != "tick":
+            sys.exit(EXIT_PROBLEM)

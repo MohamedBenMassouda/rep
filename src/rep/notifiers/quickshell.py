@@ -24,6 +24,12 @@ class QuickshellNotifier:
             extra["input"] = {"label": DONE_INPUT_LABEL, "value": str(card.done_prompt)}
         command = ["qs", "ipc", "call", "osd", "rich", self.kind, card.title, card.body, json.dumps(extra)]
 
+        self.run(command)
+
+    def dismiss(self):
+        self.run(["qs", "ipc", "call", "osd", "dismissKind", self.kind])
+
+    def run(self, command):
         try:
             subprocess.run(command, capture_output=True, timeout=COMMAND_TIMEOUT_SECONDS)
         except (OSError, subprocess.TimeoutExpired):

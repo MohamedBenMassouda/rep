@@ -11,8 +11,10 @@ CSV_COLUMNS = ("id", "day", "time", "type", "kind", "group", "ladder", "exercise
 
 
 def export_text(paths, export_format):
-    events = load_events(paths)
+    return export_records(load_state(paths), load_events(paths), export_format)
 
+
+def export_records(state, events, export_format):
     if export_format == FORMAT_CSV:
         buffer = io.StringIO()
         writer = csv.DictWriter(buffer, fieldnames=CSV_COLUMNS, extrasaction="ignore")
@@ -21,7 +23,7 @@ def export_text(paths, export_format):
 
         return buffer.getvalue()
 
-    return json.dumps({"state": load_state(paths), "events": events}, indent=1)
+    return json.dumps({"state": state, "events": events}, indent=1)
 
 
 def import_backup(paths, backup_text, include_state):

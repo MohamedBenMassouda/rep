@@ -2,7 +2,7 @@ import datetime
 from dataclasses import dataclass
 
 from rep.catalog import SKILL_GROUP
-from rep.store import EVENT_SESSION, EVENT_SET
+from rep.store import EVENT_SESSION, EVENT_SET, completed_counts
 
 RATING_EASY = 3
 RATING_STEADY = 1
@@ -160,19 +160,11 @@ def choose_challenge(state, pack, training, profile_skills, events, now, chooser
     return Challenge(KIND_HARD, group, ladder.identifier, current_exercise(state, ladder))
 
 
-def completed_per_day(events):
-    counts = {}
-
-    for event in events:
-
-        if event["type"] == EVENT_SET:
-            counts[event["day"]] = counts.get(event["day"], 0) + 1
-
-    return counts
-
-
 def streak_days(events, today, minimum):
-    counts = completed_per_day(events)
+    return streak_from_counts(completed_counts(events), today, minimum)
+
+
+def streak_from_counts(counts, today, minimum):
     checked_day = today
 
     if counts.get(checked_day.isoformat(), 0) < minimum:

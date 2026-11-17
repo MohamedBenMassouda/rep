@@ -7,12 +7,12 @@ from rep.config import level_scale, protein_range_grams
 from rep.lines import line_for
 from rep.notifiers import Button, Card
 from rep.progression import (KIND_BOSS, KIND_HARD, KIND_SKILL, RATING_EASY, RATING_FAILURE, RATING_STEADY,
-                             apply_rating, cap_usage, streak_days, target_of)
+                             apply_rating, cap_usage, choose_challenge, streak_from_counts, target_of)
 from rep.routine import describe_sessions, session_allowances
 from rep.scheduler import (ACTION_CHALLENGE, ACTION_NUDGE, ACTION_REMIND, ACTION_RETEST, ACTION_SCHEDULE_FIRST,
                            ACTION_SUMMARY, STAMP_RETEST, STAMP_SUMMARY, decide)
-from rep.store import (EVENT_SESSION, EVENT_SET, EVENT_SKIP, append_event, load_events, load_state, new_event,
-                       save_state)
+from rep.maxtest import apply_results
+from rep.store import EVENT_SESSION, EVENT_SET, EVENT_SKIP, EVENT_TEST, EventLog, new_event
 
 SECONDS_PER_MINUTE = 60
 TOKEN_BYTES = 4
@@ -37,22 +37,26 @@ RATING_GLYPHS = (GLYPH_ARROW_UP, GLYPH_CHECK, GLYPH_FIRE)
 
 
 class App:
-    def __init__(self, paths, config, pack, notifier, chooser, clock=datetime.datetime.now):
-        self.paths, self.config, self.pack = paths, config, pack
+    def __init__(self, store, config, pack, notifier, chooser, clock=datetime.datetime.now, busy_check=None):
+        self.store, self.config, self.pack = store, config, pack
         self.notifier, self.chooser, self.clock = notifier, chooser, clock
-        self.state = load_state(paths)
-        self.events = load_events(paths)
+        self.busy_check = busy_check or (lambda: busy_reason(config["conditions"]))
+        self.state = store.load_state()
+        self.events = EventLog(store.load_events)
         self.scale = level_scale(config)
         config["training"]["session_allowances"] = session_allowances(config["training"], pack)
 
     def save(self):
-        save_state(self.paths, self.state)
+        self.store.save_state(self.state)
 
     def record(self, event_type, **fields):
-        event = append_event(self.paths, new_event(event_type, now=self.clock(), **fields))
+        event = self.store.append_event(new_event(event_type, now=self.clock(), **fields))
         self.events.append(event)
 
         return event
+
+    def streak(self, today):
+        return streak_from_counts(self.store.completed_counts(), today, self.config["training"]["streak_minimum"])
 
     def amount(self, exercise_identifier):
         exercise = self.pack.exercises[exercise_identifier]
@@ -73,7 +77,7 @@ class App:
 
     def tick(self):
         now = self.clock()
-        reason = busy_reason(self.config["conditions"])
+        reason = self.busy_check()
         decision = decide(now, self.state, self.config, self.pack, self.events, reason, self.chooser)
 
         if decision is None:
@@ -101,6 +105,22 @@ class App:
             self.start_challenge(decision.detail)
 
         return decision.action
+
+    def now(self):
+        if self.state.get("pending"):
+            self.show_pending()
+
+            return "shown again"
+
+        challenge = choose_challenge(self.state, self.pack, self.config["training"], self.config["profile"]["skills"],
+                                     self.events, self.clock(), self.chooser)
+
+        if challenge is None:
+            return "Nothing to offer: every weekly cap is full and no skills are chosen."
+
+        self.start_challenge(challenge)
+
+        return "shown"
 
     def start_challenge(self, challenge):
         self.state["pending"] = {
@@ -212,7 +232,7 @@ class App:
     def show_result(self, exercise_identifier, unlocked):
         today = self.clock().date()
         done_today = sum(1 for event in self.events if event["type"] == EVENT_SET and event["day"] == today.isoformat())
-        streak = streak_days(self.events, today, self.config["training"]["streak_minimum"])
+        streak = self.streak(today)
         body = f"{done_today} today · streak {streak} d · next time {self.amount(exercise_identifier)}"
 
         if unlocked:
@@ -246,13 +266,21 @@ class App:
         self.notifier.show(Card("Time for a max test", "About 15 minutes to set your targets from real numbers.",
                                 True, buttons))
 
+    def apply_test(self, results, skill_steps):
+        apply_results(self.state, self.pack, results, skill_steps)
+        self.state["last_test_day"] = self.clock().date().isoformat()
+        self.save()
+        self.record(EVENT_TEST, results=results, skill_steps=skill_steps)
+
+        return "Targets set."
+
     def today(self):
         today = self.clock().date().isoformat()
         sessions = [event["session"] for event in self.events if event["type"] == EVENT_SESSION and event["day"] == today]
 
         return {
             "done": sum(1 for event in self.events if event["type"] == EVENT_SET and event["day"] == today),
-            "streak": streak_days(self.events, self.clock().date(), self.config["training"]["streak_minimum"]),
+            "streak": self.streak(self.clock().date()),
             "trained": sessions,
             "sessions": describe_sessions(self.config["training"], self.config["training"]["session_allowances"]),
             "skills": {self.pack.skills[skill].title: self.pack.exercises[self.current_skill_step(skill)].name
@@ -281,7 +309,7 @@ class App:
             label = "skills" if event["group"] == SKILL_GROUP else event["group"]
             per_group[label] = per_group.get(label, 0) + 1
 
-        streak = streak_days(self.events, today, self.config["training"]["streak_minimum"])
+        streak = self.streak(today)
         groups_text = ", ".join(f"{group} {count}" for group, count in per_group.items())
 
         return f"Today: {len(sets)} challenges · streak {streak} d", f"{groups_text} · week: {week}"

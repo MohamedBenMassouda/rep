@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
-rep = "rep.cli:main"
+rep = "rep.launcher:main"
 
 [build-system]
 requires = ["hatchling"]

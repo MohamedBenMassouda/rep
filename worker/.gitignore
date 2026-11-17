@@ -1,0 +1,7 @@
+.venv/
+.wrangler/
+.dev.vars
+node_modules/
+python_modules/
+src/rep/
+pylock.toml

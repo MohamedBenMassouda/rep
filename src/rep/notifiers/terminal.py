@@ -10,3 +10,6 @@ class TerminalNotifier:
 
         for button in card.buttons:
             print(f"  {button.label}: {shlex.join(rep_command() + list(button.arguments))}")
+
+    def dismiss(self):
+        pass

@@ -63,14 +63,17 @@ def apply_results(state, pack, results, skill_steps):
         state["targets"][hardest] = max(MINIMUM_TARGET, round(results[hardest] * share))
 
 
-def run_test(app, read=input, write=print):
+def ask_test(app, read=input, write=print):
     results = ask_results(app.pack, read, write)
     skill_steps = ask_skill_steps(app.pack, [skill for skill in app.config["profile"]["skills"] if skill in app.pack.skills],
                                   read, write)
-    apply_results(app.state, app.pack, results, skill_steps)
-    app.save()
-    app.record(EVENT_TEST, results=results, skill_steps=skill_steps)
-    write("\nTargets set.")
+
+    return results, skill_steps
+
+
+def run_test(app, read=input, write=print):
+    results, skill_steps = ask_test(app, read, write)
+    write("\n" + app.apply_test(results, skill_steps))
 
     return results
 
