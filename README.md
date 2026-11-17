@@ -22,6 +22,8 @@ pull-up. You answer from the notification, and your targets move with you.
   you name (e.g. a focus timer or the lock screen).
 - **Works on any Linux desktop:** standard notifications with buttons, a
   [Quickshell](https://quickshell.org) flyout when available, or the terminal.
+- **In the cloud too (optional):** a free Cloudflare Worker runs the schedule and keeps your
+  history, while your desktop keeps showing the cards and reporting when you're busy.
 
 ## Install
 
@@ -51,6 +53,7 @@ and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE
 | `rep pack export` | copy the exercise pack to your config folder to edit or extend |
 | `rep install-timer` / `rep uninstall-timer` | the systemd user timer |
 | `rep completion zsh\|bash\|fish` | print a shell completion script |
+| `rep sync-upload` | copy this computer's history, targets and ladders to the cloud (once, see below) |
 
 ### Shell completion
 
@@ -98,6 +101,7 @@ per muscle against those groups' weekly caps and skips them for that day's chall
 | `[nudges]` | `protein`, `bedtime`, `summary` times (`HH:MM` or `off`) |
 | `[display]` | `notifier` (auto / quickshell / desktop / terminal), `quickshell_kind`, `line_command` |
 | `[conditions]` | `pause_files`, `check_microphone`, `check_screen_share` |
+| `[sync]` | `url` and `token` of your cloud Worker; empty keeps everything on this computer |
 
 `line_command` lets another program supply the lines on the cards, e.g. a themed set of quips:
 `line_command = "my-quips {kind}"` is called with `challenge`, `done`, `level_up`, `boss`,
@@ -114,7 +118,43 @@ its ladder moves on) and a form `cue`.
 ### Data
 
 State lives in `~/.local/state/rep/`: `state.json` (targets, ladder positions, the pending
-challenge) and `events.jsonl` (every set, skip, session and max test). Nothing leaves your computer.
+challenge) and `events.jsonl` (every set, skip, session and max test). Nothing leaves your computer
+unless you set up the cloud below.
+
+## Cloud (optional)
+
+A Cloudflare Worker (free plan) becomes the one place that decides when a card is due and keeps
+your history. Your desktop's `rep tick` keeps running: it sends your config and whether you're busy
+(mic, screen share, pause files) to the Worker, shows the cards it produced in your flyout, and
+forwards your answers.
+
+You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
+
+1. Make a random secret for your desktop: `openssl rand -hex 32`.
+2. Deploy the Worker and give it the secret:
+
+   ```sh
+   cd worker
+   uv sync
+   uv run pywrangler login
+   uv run pywrangler deploy
+   uv run pywrangler secret put DESKTOP_TOKEN
+   ```
+
+   `deploy` prints your Worker's address, `https://rep.<your-subdomain>.workers.dev`.
+3. On your desktop, add to `~/.config/rep/config.toml`:
+
+   ```toml
+   [sync]
+   url = "https://rep.<your-subdomain>.workers.dev"
+   token = "<DESKTOP_TOKEN>"
+   ```
+
+   then run `rep tick` once and `rep sync-upload` once to copy your history, targets and ladders.
+
+The Worker ticks every 3 minutes and reads only the last week of sets plus your max tests, so it
+stays inside the free plan's CPU budget as your history grows. Cloudflare's dashboard shows the CPU
+time of each run under Workers → rep → Metrics.
 
 ## Development
 

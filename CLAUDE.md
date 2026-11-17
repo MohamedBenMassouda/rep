@@ -7,10 +7,14 @@ runs `rep tick` every 3 minutes. The tick decides whether something is due and w
 card, and its buttons call `rep answer` / `rep rate` back with a challenge token. Moving parts:
 an exercise pack (JSON), a TOML config, `state.json` + `events.jsonl` in `~/.local/state/rep`,
 and pluggable notifiers (Quickshell flyout over IPC, desktop notifications via `notify-send`, terminal).
+Optionally a Cloudflare Worker (`worker/`) takes over deciding: it ticks on a cron, keeps state in a
+Durable Object's SQLite, and the desktop syncs with it (see "Cloud sync").
 
 One Python package, `src/rep`, stdlib only (Python 3.11+, `tomllib`), built with hatchling and
 installed with `uv tool install` or `pipx`. Tests are in `tests/` (`unittest`). There is no
-root-level tooling beyond `pyproject.toml`.
+root-level tooling beyond `pyproject.toml`. `worker/` is the Python Worker (`pyproject.toml` for
+pywrangler, `wrangler.jsonc`, `src/entry.py`); its build step rsyncs `src/rep` into `worker/src/rep`
+(gitignored), so `src/rep` stays the only copy of the code.
 `main` is the only long-lived branch. Nothing deploys: users install from git.
 
 ## Commands
@@ -24,6 +28,7 @@ From the repository root:
 | `XDG_CONFIG_HOME=<scratch>/config XDG_STATE_HOME=<scratch>/state PYTHONPATH=src python3 -m rep …` | the whole tool against throwaway config and state (`init`, `test`, `now`, `answer`, `rate`, `stats --history`, `export`, `import`). Set `notifier = "terminal"` so cards print |
 | `uv tool install --force .`                                  | install the working copy as `rep`                             |
 | `rep now`                                                    | manual smoke rig. Shows a **real** card on your desktop and writes **real** state, never in CI |
+| `cd worker && uv run pywrangler dev --test-scheduled`        | the Worker locally (secrets from `worker/.dev.vars`); `curl "localhost:8787/cdn-cgi/handler/scheduled"` runs a tick |
 
 CI (`.github/workflows/tests.yml`) runs the unittest suite on Python 3.11, 3.12, 3.13 and 3.14.
 That job is the only check. Nothing lints or type-checks: hold the code style below yourself.
@@ -144,7 +149,9 @@ its state transition runs again from the top:
   `rep rate <token> 3|1|0 [reps done]`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
   through the hidden `rep await-notification <json>`.
 - **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained`,
-  `sessions` (day name → muscles text) and `skills`.
+  `sessions` (day name → muscles text) and `skills`. The `rep` script enters through
+  `rep.launcher`: with sync on, `rep today` prints the `today.json` that every sync writes, after
+  importing only `rep.config` and `rep.paths`. Keep the launcher's imports that small.
 - **Session names are data too.** They come from `[training] routine` (else
   `session_allowances`), are stored in `session` events, and `rep routine --names` feeds shell
   completion for `rep session`. `App` replaces `session_allowances` with the routine's on load
@@ -152,6 +159,30 @@ its state transition runs again from the top:
 - **Line kinds** passed to `line_command` and looked up in packs: `challenge`, `done`,
   `level_up`, `boss`, `protein`, `bedtime`.
 - **Event types:** `set`, `skip`, `session`, `test`. Counting code filters on `type`.
+- **`App` takes a store** (`FileStore`, `MemoryStore`, or the cloud's `SqlStore`) and a `busy_check`.
+  `App.events` is a lazy `EventLog`: a tick with nothing due must not read the history. The last
+  max-test day is kept in `state["last_test_day"]` for the same reason.
+
+### Cloud sync
+
+- With `[sync] url` set, the Worker is the only thing that decides. The desktop never runs
+  `decide()`: `rep tick` posts its config, pack, timezone and busy reason to `/desktop/sync` and
+  shows the cards the Worker produced since its cursor (skipping ones older than
+  `CARD_FRESH_SECONDS`). Commands that change state are forwarded to `/desktop/command`. `today`
+  reads the cached `today.json`, `routine` needs only the config, and `stats` and `export` run on a
+  `MemoryStore` built from `/desktop/export`.
+- `rep.cloud.Brain` is plain Python over an `execute(sql, *parameters)` function, tested on
+  `sqlite3`. `worker/src/entry.py` only adapts it to the Durable Object. Keep logic out of
+  `entry.py`.
+- **The cloud reads only the last `RECENT_HISTORY_DAYS` of events plus every `test` event.** The
+  free plan allows 10 ms of CPU per run. Anything the cloud needs from older history goes through
+  a store query (the streak uses `completed_counts()`, a `GROUP BY day`), never a full load.
+- `SqlStore` caches settings in memory, skips writes of unchanged values, and the Durable Object
+  keeps one store for its lifetime (it is the only writer). Every query in it uses an index or
+  the primary key: check `EXPLAIN QUERY PLAN` when adding one. A desktop command carries its sync
+  report, so it is one round trip.
+- The Worker's one secret is `DESKTOP_TOKEN`; the desktop's `[sync]` section never leaves the
+  desktop.
 
 ### Results, retries, errors
 
@@ -163,7 +194,8 @@ User mistakes (no config, a broken pack) exit with `EXIT_PROBLEM` and one readab
 ## Testing
 
 `unittest` from the standard library, in `tests/` (`test_progression.py`, `test_scheduler.py`,
-`test_app.py`, `test_maxtest.py`, `test_backup.py`). Shared fixtures are in `tests/helpers.py`.
+`test_app.py`, `test_maxtest.py`, `test_backup.py`, `test_cloud.py`, `test_sync.py`). Shared fixtures
+are in `tests/helpers.py`, including `sqlite_execute()` for the cloud store.
 
 - **No network, no secret store, no real vendor API from the test suite.** Fake HTTP at the
   transport layer (there is no HTTP here; tests turn the busy checks off in config and pass a
@@ -195,6 +227,10 @@ User mistakes (no config, a broken pack) exit with `EXIT_PROBLEM` and one readab
   Nested tables beyond one level are written as inline tables.
 - zsh users: an unquoted `$var` holding a command is not word-split. Use a shell function in scripts.
 - CI only runs the tests: no lint, no type check, no style check.
+- pywrangler bundles neither symlinks nor local path dependencies: the Worker's build step rsyncs
+  `src/rep` instead. Use `rsync -a`, not `cp`: rewriting the files retriggers the dev watcher and
+  rebuilds in a loop.
+- In a Python Worker, `sql.exec(...).toArray()` already returns a Python list.
 
 ## Working style
 
