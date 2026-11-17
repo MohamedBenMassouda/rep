@@ -7,14 +7,18 @@ runs `rep tick` every 3 minutes. The tick decides whether something is due and w
 card, and its buttons call `rep answer` / `rep rate` back with a challenge token. Moving parts:
 an exercise pack (JSON), a TOML config, `state.json` + `events.jsonl` in `~/.local/state/rep`,
 and pluggable notifiers (Quickshell flyout over IPC, desktop notifications via `notify-send`, terminal).
-Optionally a Cloudflare Worker (`worker/`) takes over deciding: it ticks on a cron, keeps state in a
+Optionally two Cloudflare Workers take over deciding: `front/` (JavaScript, `rep-api`) owns the cron
+and the public routes, and `worker/` (Python, `rep`) holds the Durable Object that keeps state in a
 Durable Object's SQLite, and the desktop syncs with it (see "Cloud sync").
 
 One Python package, `src/rep`, stdlib only (Python 3.11+, `tomllib`), built with hatchling and
 installed with `uv tool install` or `pipx`. Tests are in `tests/` (`unittest`). There is no
 root-level tooling beyond `pyproject.toml`. `worker/` is the Python Worker (`pyproject.toml` for
 pywrangler, `wrangler.jsonc`, `src/entry.py`); its build step rsyncs `src/rep` into `worker/src/rep`
-(gitignored), so `src/rep` stays the only copy of the code.
+(gitignored), so `src/rep` stays the only copy of the code. `front/` is about forty lines of
+JavaScript with no package.json: it checks secrets and forwards to the Durable Object's RPC
+methods, nothing else. Python Workers cost 5 to 20 ms of CPU per request just to start handling it,
+over the free plan's 10 ms, which is the only reason the front is JavaScript.
 `main` is the only long-lived branch. Nothing deploys: users install from git.
 
 ## Commands
@@ -28,7 +32,7 @@ From the repository root:
 | `XDG_CONFIG_HOME=<scratch>/config XDG_STATE_HOME=<scratch>/state PYTHONPATH=src python3 -m rep …` | the whole tool against throwaway config and state (`init`, `test`, `now`, `answer`, `rate`, `stats --history`, `export`, `import`). Set `notifier = "terminal"` so cards print |
 | `uv tool install --force .`                                  | install the working copy as `rep`                             |
 | `rep now`                                                    | manual smoke rig. Shows a **real** card on your desktop and writes **real** state, never in CI |
-| `cd worker && uv run pywrangler dev --test-scheduled`        | the Worker locally (secrets from `worker/.dev.vars`); `curl "localhost:8787/cdn-cgi/handler/scheduled"` runs a tick |
+| `cd worker && uv run pywrangler sync && npx wrangler dev -c ../front/wrangler.jsonc -c wrangler.jsonc --test-scheduled` | both Workers locally (secrets from `front/.dev.vars`); `curl "localhost:8787/cdn-cgi/handler/scheduled"` runs a tick |
 
 CI (`.github/workflows/tests.yml`) runs the unittest suite on Python 3.11, 3.12, 3.13 and 3.14.
 That job is the only check. Nothing lints or type-checks: hold the code style below yourself.
@@ -172,8 +176,8 @@ its state transition runs again from the top:
   reads the cached `today.json`, `routine` needs only the config, and `stats` and `export` run on a
   `MemoryStore` built from `/desktop/export`.
 - `rep.cloud.Brain` is plain Python over an `execute(sql, *parameters)` function, tested on
-  `sqlite3`. `worker/src/entry.py` only adapts it to the Durable Object. Keep logic out of
-  `entry.py`.
+  `sqlite3`. `worker/src/entry.py` only adapts it to the Durable Object, and `front/src/index.js`
+  only routes. Keep logic out of both: it belongs in `src/rep`, where it is tested.
 - **The cloud reads only the last `RECENT_HISTORY_DAYS` of events plus every `test` event.** The
   free plan allows 10 ms of CPU per run. Anything the cloud needs from older history goes through
   a store query (the streak uses `completed_counts()`, a `GROUP BY day`), never a full load.
@@ -185,8 +189,9 @@ its state transition runs again from the top:
   answers `needs_pack` before running anything, so the resend never runs a command twice.
   `today` is cached under a marker of the state, config, date and `MAX(rowid)` of events; never
   use `COUNT(*)` for such checks (Durable Objects bill rows read).
-- The Worker's one secret is `DESKTOP_TOKEN`; the desktop's `[sync]` section never leaves the
-  desktop.
+- `rep-api` holds the one secret, `DESKTOP_TOKEN`; the Python Worker has no public URL
+  (`workers_dev: false`) and is reached only through the Durable Object binding. The desktop's
+  `[sync]` section never leaves the desktop.
 
 ### Results, retries, errors
 

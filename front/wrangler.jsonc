@@ -1,0 +1,10 @@
+{
+  "name": "rep-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "triggers": { "crons": ["*/3 * * * *"] },
+  "durable_objects": {
+    "bindings": [{ "name": "BRAIN", "class_name": "RepBrain", "script_name": "rep" }]
+  },
+  "observability": { "enabled": true }
+}

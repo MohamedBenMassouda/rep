@@ -4,7 +4,8 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["python_workers"],
   "build": { "command": "rsync -a --delete --exclude __pycache__ ../src/rep/ src/rep/" },
-  "triggers": { "crons": ["*/3 * * * *"] },
+  "workers_dev": false,
+  "triggers": { "crons": [] },
   "durable_objects": { "bindings": [{ "name": "BRAIN", "class_name": "RepBrain" }] },
   "exports": { "RepBrain": { "type": "durable-object", "storage": "sqlite" } },
   "observability": { "enabled": true }

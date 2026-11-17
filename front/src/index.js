@@ -1,0 +1,57 @@
+const BRAIN_NAME = "owner";
+const DESKTOP_ROUTE_PREFIX = "/desktop/";
+const AUTHORIZATION_HEADER = "Authorization";
+const BEARER_PREFIX = "Bearer ";
+const METHOD_POST = "POST";
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_NOT_FOUND = 404;
+const EMPTY_BODY = "";
+const JSON_HEADERS = { "Content-Type": "application/json" };
+const SECRET_DIGEST = "SHA-256";
+
+async function digestOf(text) {
+  return crypto.subtle.digest(SECRET_DIGEST, new TextEncoder().encode(text));
+}
+
+async function sameSecret(given, expected) {
+  if (!given || !expected) {
+    return false;
+  }
+
+  const [givenDigest, expectedDigest] = await Promise.all([digestOf(given), digestOf(expected)]);
+
+  return crypto.subtle.timingSafeEqual(givenDigest, expectedDigest);
+}
+
+function brainOf(env) {
+  return env.BRAIN.getByName(BRAIN_NAME);
+}
+
+function bearerToken(request) {
+  const header = request.headers.get(AUTHORIZATION_HEADER) || EMPTY_BODY;
+
+  return header.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : EMPTY_BODY;
+}
+
+export default {
+  async fetch(request, env) {
+    const path = new URL(request.url).pathname;
+
+    if (request.method !== METHOD_POST || !path.startsWith(DESKTOP_ROUTE_PREFIX)) {
+      return new Response(EMPTY_BODY, { status: HTTP_NOT_FOUND });
+    }
+
+    if (!(await sameSecret(bearerToken(request), env.DESKTOP_TOKEN))) {
+      return new Response(EMPTY_BODY, { status: HTTP_UNAUTHORIZED });
+    }
+
+    const action = path.slice(DESKTOP_ROUTE_PREFIX.length);
+    const answer = await brainOf(env).desktop(action, await request.text());
+
+    return new Response(answer, { headers: JSON_HEADERS });
+  },
+
+  async scheduled(controller, env, context) {
+    context.waitUntil(brainOf(env).tick());
+  },
+};

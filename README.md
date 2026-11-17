@@ -131,22 +131,24 @@ forwards your answers.
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
 1. Make a random secret for your desktop: `openssl rand -hex 32`.
-2. Deploy the Worker and give it the secret:
+2. Deploy the two Workers (the Python one holding your data first) and give the front the secret:
 
    ```sh
    cd worker
    uv sync
    uv run pywrangler login
    uv run pywrangler deploy
-   uv run pywrangler secret put DESKTOP_TOKEN
+   cd ../front
+   npx wrangler deploy
+   npx wrangler secret put DESKTOP_TOKEN
    ```
 
-   `deploy` prints your Worker's address, `https://rep.<your-subdomain>.workers.dev`.
+   The second `deploy` prints the address, `https://rep-api.<your-subdomain>.workers.dev`.
 3. On your desktop, add to `~/.config/rep/config.toml`:
 
    ```toml
    [sync]
-   url = "https://rep.<your-subdomain>.workers.dev"
+   url = "https://rep-api.<your-subdomain>.workers.dev"
    token = "<DESKTOP_TOKEN>"
    ```
 
