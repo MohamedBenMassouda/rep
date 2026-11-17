@@ -19,3 +19,22 @@ jobs:
       - run: python -m unittest discover -s tests -t .
         env:
           PYTHONPATH: src
+
+  deploy:
+    needs: unittest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'MohamedBenMassouda/rep'
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run pywrangler deploy
+        working-directory: worker
+      - run: npx --yes wrangler@4.164.0 deploy
+        working-directory: front

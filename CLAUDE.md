@@ -19,7 +19,7 @@ pywrangler, `wrangler.jsonc`, `src/entry.py`); its build step rsyncs `src/rep` i
 JavaScript with no package.json: it checks secrets and forwards to the Durable Object's RPC
 methods, nothing else. Python Workers cost 5 to 20 ms of CPU per request just to start handling it,
 over the free plan's 10 ms, which is the only reason the front is JavaScript.
-`main` is the only long-lived branch. Nothing deploys: users install from git.
+`main` is the only long-lived branch. Users install the CLI from git; the two Workers deploy from CI.
 
 ## Commands
 
@@ -36,6 +36,10 @@ From the repository root:
 
 CI (`.github/workflows/tests.yml`) runs the unittest suite on Python 3.11, 3.12, 3.13 and 3.14.
 That job is the only check. Nothing lints or type-checks: hold the code style below yourself.
+A push to `main` in this repository, once every test job passes, runs the `deploy` job: `worker/`
+first (it owns the Durable Object class `rep-api` binds to), then `front/`. It needs the repository
+secrets `CLOUDFLARE_API_TOKEN` (an "Edit Cloudflare Workers" token limited to the Personal
+account) and `CLOUDFLARE_ACCOUNT_ID`. Forks and other branches never deploy.
 
 Branches are `<topic>/<short-slug>` when not working on `main`. There is no PR template. Commits
 are small conventional commits (`feat(scheduler): …`, `fix(app): …`, `test: …`) with no AI
