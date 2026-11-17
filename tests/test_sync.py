@@ -60,11 +60,11 @@ class SyncTests(unittest.TestCase):
         return config_with(conditions=NO_CHECKS, sync={"url": CLOUD_URL, "token": TOKEN})
 
     def tick(self):
-        return desktop_tick(self.client, self.paths, self.config(), default_pack_raw(), self.notifier, None,
+        return desktop_tick(self.client, self.paths, self.config(), default_pack_raw(), self.notifier,
                             int(self.moment.timestamp()))
 
     def desktop(self, *arguments):
-        return desktop_command(self.client, self.paths, self.config(), default_pack_raw(), self.notifier, None,
+        return desktop_command(self.client, self.paths, self.config(), default_pack_raw(), self.notifier,
                                int(self.moment.timestamp()), list(arguments))
 
     def phone_command(self, *arguments):

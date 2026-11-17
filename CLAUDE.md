@@ -105,7 +105,8 @@ exposing `show(card)`. Desktop-specific code stays in `src/rep/notifiers/<backen
 ## Scheduling and progression contract
 
 - **`scheduler.decide()`** is pure: given `now`, state, config, pack, events, the busy reason
-  and a random source, it returns a `Decision` and changes nothing. Order: nudges (protein,
+  and a random source, it returns a `Decision` and changes nothing. Order: nothing while
+  `state["paused_until"]` is ahead (`App.pause()`), nudges (protein,
   bedtime), summary, then outside active hours nothing, retest reminder, first-run scheduling,
   "not due or busy", remind the pending card after `reminder_minutes`, else a new challenge.
 - **`progression`** is pure too: `apply_rating()` (3+ left raises the target, three steady sets
@@ -150,12 +151,12 @@ its state transition runs again from the top:
   `best`, `pending` and every event. Renaming one in a pack orphans its history; migrate the
   state and events in the same change.
 - **The button argv is an interface.** Notifiers run `rep answer <token> done|skip|later`,
-  `rep rate <token> 3|1|0 [reps done]`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
+  `rep rate <token> 3|1|0 [reps done]`, `rep pause <minutes>`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
   through the hidden `rep await-notification <json>`. Telegram carries the same arguments joined by
-  spaces as `callback_data` (64 bytes at most); the phone only offers `answer`, `rate` and `dismiss`.
+  spaces as `callback_data` (64 bytes at most); the phone only offers `PHONE_COMMANDS`.
 - **Reps typed in Telegram** wait in `pending["typed"]` until the rating; `App.rate()` uses them when
   the button carries no reps.
-- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/help`)
+- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/pause`, `/help`)
   answer in plain text, never `parse_mode`, and are split at `MESSAGE_LIMIT`. Stats for the phone
   come from `charts.phone_stats_text()`, which shares its rows with the terminal's `stats_text()`.
 - **The max test in Telegram** keeps its progress in the `max_test` setting (absolute position and
@@ -184,11 +185,14 @@ its state transition runs again from the top:
 ### Cloud sync
 
 - With `[sync] url` set, the Worker is the only thing that decides. The desktop never runs
-  `decide()`: `rep tick` posts its config, pack, timezone and busy reason to `/desktop/sync` and
+  `decide()`: `rep tick` posts its config, pack and timezone to `/desktop/sync` and
   shows the cards the Worker produced since its cursor (skipping ones older than
   `CARD_FRESH_SECONDS`). Commands that change state are forwarded to `/desktop/command`. `today`
   reads the cached `today.json`, `routine` needs only the config, and `stats` and `export` run on a
   `MemoryStore` built from `/desktop/export`.
+- **The cloud never waits on the desktop.** The desktop's busy checks (mic, screen share, pause
+  files) apply only without sync; the report carries no busy reason, so a locked or sleeping desktop
+  never holds the phone back. With sync, the only holds are a running max test and `App.pause()`.
 - `rep.cloud.Brain` is plain Python over an `execute(sql, *parameters)` function, tested on
   `sqlite3`. `worker/src/entry.py` only adapts it to the Durable Object, and `front/src/index.js`
   only routes. Keep logic out of both: it belongs in `src/rep`, where it is tested.

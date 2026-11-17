@@ -25,6 +25,11 @@ ANSWERS = (ANSWER_DONE, ANSWER_SKIP, ANSWER_LATER)
 GLYPH_CHECK = 0xF012C
 GLYPH_CLOSE = 0xF0156
 GLYPH_CLOCK = 0xF0150
+GLYPH_PAUSE = 0xF03E4
+MEETING_PAUSE_MINUTES = 60
+MAXIMUM_PAUSE_MINUTES = 24 * 60
+PAUSE_MINUTES_RANGE = range(MAXIMUM_PAUSE_MINUTES + 1)
+PAUSE_TIME_FORMAT = "%H:%M"
 GLYPH_ARROW_UP = 0xF0737
 GLYPH_FIRE = 0xF0238
 GLYPH_TROPHY = 0xF0538
@@ -160,7 +165,8 @@ class App:
 
         buttons = (Button("Done", GLYPH_CHECK, ("answer", pending["token"], ANSWER_DONE)),
                    Button("Skip", GLYPH_CLOSE, ("answer", pending["token"], ANSWER_SKIP)),
-                   Button("Later", GLYPH_CLOCK, ("answer", pending["token"], ANSWER_LATER)))
+                   Button("Later", GLYPH_CLOCK, ("answer", pending["token"], ANSWER_LATER)),
+                   Button("Meeting", GLYPH_PAUSE, ("pause", str(MEETING_PAUSE_MINUTES))))
         self.notifier.show(Card(title, " · ".join(part for part in (line, exercise.cue) if part), True, buttons))
 
     def show_rating(self, pending):
@@ -202,6 +208,16 @@ class App:
             self.save()
 
         return answer
+
+    def pause(self, minutes):
+        if minutes not in PAUSE_MINUTES_RANGE:
+            return f"ignored: pause for at most {MAXIMUM_PAUSE_MINUTES} minutes"
+
+        resume_at = self.clock() + datetime.timedelta(minutes=minutes)
+        self.state["paused_until"] = resume_at.timestamp()
+        self.save()
+
+        return f"Paused until {resume_at.strftime(PAUSE_TIME_FORMAT)}."
 
     def rate(self, token, rating, done=None):
         pending = self.matching_pending(token, STAGE_RATE)

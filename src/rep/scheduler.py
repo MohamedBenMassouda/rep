@@ -57,6 +57,9 @@ def decide(now, state, config, pack, events, busy_reason, chooser):
     today = now.date()
     nudges, schedule = config["nudges"], config["schedule"]
 
+    if now.timestamp() < state["paused_until"]:
+        return None
+
     for kind in NUDGE_KINDS:
 
         if clock_time_reached(now, nudges[kind]) and not stamped_today(state, kind, today):

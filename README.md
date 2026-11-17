@@ -19,11 +19,12 @@ pull-up. You answer from the notification, and your targets move with you.
   sets targets from your numbers. A reminder comes every 6 weeks.
 - **Weekly boss challenge**, protein check-in, bedtime reminder and a daily summary with streaks.
 - **Waits when you're busy:** a call or recording using the mic, screen sharing, or any pause file
-  you name (e.g. a focus timer or the lock screen).
+  you name (e.g. a focus timer or the lock screen). In a meeting, tap **Meeting** on a card or run
+  `rep pause [minutes]`: nothing is sent until it's over, then the card comes back.
 - **Works on any Linux desktop:** standard notifications with buttons, a
   [Quickshell](https://quickshell.org) flyout when available, or the terminal.
 - **On your phone too (optional):** free Cloudflare Workers run the schedule and send every
-  card to Telegram, while your desktop keeps showing them and reporting when you're busy.
+  card to Telegram, whether your desktop is on, off or locked, while your desktop keeps showing them.
 
 ## Install
 
@@ -42,6 +43,7 @@ and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE
 | Command | Does |
 |---|---|
 | `rep now` | a challenge right now |
+| `rep pause [MINUTES]` | nothing for 60 minutes (or MINUTES, up to a day); `rep pause 0` resumes |
 | `rep session DAY` | log one of your training days today (`upper`, `legs`, `full` without a routine) |
 | `rep routine [--names]` | your training days, their muscles and what they count as |
 | `rep stats [--history]` | targets, ladders, weekly caps; `--history` adds progress charts and compares max tests |
@@ -125,15 +127,17 @@ unless you set up the cloud below.
 
 Two Cloudflare Workers (free plan) become the one place that decides when a card is due and keeps
 your history. They send each card to a Telegram bot, so cards reach your phone with your desktop
-off. Your desktop's `rep tick` keeps running: it sends your config and whether you're busy (mic,
-screen share, pause files), shows the same cards in your flyout, and forwards your answers. Answer
+off. Your desktop's `rep tick` keeps running: it sends your config, shows the same cards in your
+flyout, and forwards your answers. The desktop's busy checks (mic, screen share, pause files) only
+apply without the cloud: with it, a locked or busy desktop never holds your phone back, and you
+pause by hand with **Meeting**, `/pause` or `rep pause`. Answer
 wherever you are: the other side catches up within one tick.
 
 In Telegram, tap the buttons as usual. While a set waits for its rating, send the reps you did as a
 number before tapping how it felt. The bot also takes `/now` (a challenge right away), `/session`
 (log a training day from buttons, or `/session chest-day`), `/today`, `/stats`, `/routine`,
-`/summary`, `/test` (the max test, one question at a time; `/skip` and `/cancel` work during it)
-and `/help`. Export and import stay on the desktop.
+`/summary`, `/test` (the max test, one question at a time; `/skip` and `/cancel` work during it),
+`/pause` (nothing for 60 minutes, `/pause 90` for longer, `/pause 0` to resume) and `/help`. Export and import stay on the desktop.
 
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
@@ -176,6 +180,7 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
      {"command": "routine", "description": "your training days"},
      {"command": "summary", "description": "today's summary"},
      {"command": "test", "description": "the max test, one question at a time"},
+     {"command": "pause", "description": "no challenges for an hour (or /pause 90)"},
      {"command": "help", "description": "what the bot can do"}]}'
    ```
 6. On your desktop, add to `~/.config/rep/config.toml`:

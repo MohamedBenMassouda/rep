@@ -10,13 +10,12 @@ import sys
 import time
 from pathlib import Path
 
-from rep.app import ANSWERS, App
+from rep.app import ANSWERS, MEETING_PAUSE_MINUTES, App
 from rep.backup import FORMAT_JSON, FORMATS, export_records, export_text, import_backup
 from rep.catalog import DEFAULT_PACK_RESOURCE, PackError, load_pack
 from rep.charts import stats_text
 from rep.completion import COMPLETION_COMMAND, SHELLS, completion_script
 from rep.config import DEFAULTS, ConfigMissing, load_config, merge, save_config
-from rep.conditions import busy_reason
 from rep.maxtest import ask_test, run_test
 from rep.notifiers import Card, make_notifier, rep_command
 from rep.notifiers.desktop import AWAIT_SUBCOMMAND, await_notification
@@ -34,8 +33,8 @@ TERMINALS = ("kitty", "foot", "alacritty", "wezterm", "gnome-terminal", "konsole
 EXIT_PROBLEM = 1
 
 
-SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "session", "summary", "dismiss", "test", "today", "stats",
-                   "routine", "export", "import", "sync-upload")
+SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "pause", "session", "summary", "dismiss", "test", "today",
+                   "stats", "routine", "export", "import", "sync-upload")
 
 
 def pack_for(config):
@@ -73,6 +72,9 @@ def forwarded_arguments(arguments):
     if command == "session":
         return [command, arguments.kind]
 
+    if command == "pause":
+        return [command, str(arguments.minutes)]
+
     return [command]
 
 
@@ -85,12 +87,12 @@ def cloud_app(client, config):
 
 def sync_tick(client, paths, config):
     return desktop_tick(client, paths, config, pack_raw_for(config), make_notifier(config["display"]),
-                        busy_reason(config["conditions"]), int(time.time()))
+                        int(time.time()))
 
 
 def sync_command(client, paths, config, forwarded):
     return desktop_command(client, paths, config, pack_raw_for(config), make_notifier(config["display"]),
-                           busy_reason(config["conditions"]), int(time.time()), forwarded)
+                           int(time.time()), forwarded)
 
 
 def local_app(config):
@@ -234,6 +236,8 @@ def parser():
     rate.add_argument("token")
     rate.add_argument("rating", type=int, choices=RATINGS)
     rate.add_argument("done", type=int, nargs="?", help="reps (or seconds) you actually did")
+    pause = commands.add_parser("pause", help="no challenges for a while (0 resumes)")
+    pause.add_argument("minutes", type=int, nargs="?", default=MEETING_PAUSE_MINUTES)
     session = commands.add_parser("session", help="log a training session today")
     setattr(session.add_argument("kind"), COMPLETION_COMMAND, ("routine", "--names"))
     routine = commands.add_parser("routine", help="your training days and the muscles each one trains")
@@ -292,6 +296,8 @@ def dispatch(paths, arguments):
         command_routine(build_app(paths), arguments)
     elif command == "session":
         print(build_app(paths).log_session(arguments.kind))
+    elif command == "pause":
+        print(build_app(paths).pause(arguments.minutes))
     elif command == "test":
         run_test(build_app(paths))
     elif command == "test-window":

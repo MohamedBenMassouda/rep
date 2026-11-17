@@ -5,7 +5,7 @@ import json
 import random
 import zoneinfo
 
-from rep.app import ANSWERS, STAGE_RATE, App
+from rep.app import ANSWERS, MEETING_PAUSE_MINUTES, STAGE_RATE, App
 from rep.catalog import parse_pack
 from rep.notifiers import Card, OutboxNotifier, card_to_dict
 from rep.charts import phone_stats_text
@@ -22,7 +22,6 @@ SETTING_STATE = "state"
 SETTING_CONFIG = "config"
 SETTING_PACK = "pack"
 SETTING_TIMEZONE = "timezone"
-SETTING_BUSY = "busy"
 SETTING_PACK_DIGEST = "pack_digest"
 SETTING_TODAY = "today"
 SETTING_OPEN_MESSAGE = "open_message"
@@ -31,7 +30,6 @@ SETTING_MAX_TEST = "max_test"
 TEST_SESSION_SECONDS = 7200
 MAXIMUM_TEST_RESULT = 999
 DEFAULT_TIMEZONE = "UTC"
-BUSY_REPORT_FRESH_SECONDS = 600
 RECENT_HISTORY_DAYS = 7
 CARD_KEEP_SECONDS = 86400
 COMMAND_ANSWER = "answer"
@@ -40,6 +38,7 @@ COMMAND_SESSION = "session"
 COMMAND_NOW = "now"
 COMMAND_SUMMARY = "summary"
 COMMAND_DISMISS = "dismiss"
+COMMAND_PAUSE = "pause"
 COMMAND_APPLY_TEST = "apply-test"
 TELEGRAM_NOW = "/now"
 TELEGRAM_SESSION = "/session"
@@ -48,6 +47,7 @@ TELEGRAM_STATS = "/stats"
 TELEGRAM_ROUTINE = "/routine"
 TELEGRAM_SUMMARY = "/summary"
 TELEGRAM_TEST = "/test"
+TELEGRAM_PAUSE = "/pause"
 TELEGRAM_SKIP = "/skip"
 TELEGRAM_CANCEL = "/cancel"
 TELEGRAM_HELP_COMMANDS = ("/help", "/start")
@@ -86,6 +86,7 @@ TELEGRAM_HELP = "\n".join((
     "/routine: your training days and their muscles",
     "/summary: today's summary",
     "/test: the max test, one question at a time (/skip, /cancel)",
+    f"/pause: no challenges for {MEETING_PAUSE_MINUTES} minutes (or /pause 90; /pause 0 resumes)",
     "",
     "Export and import stay on your desktop: rep export, rep import.",
 ))
@@ -231,15 +232,7 @@ class Brain:
         return int(self.clock().timestamp())
 
     def busy_reason(self):
-        if self.test_session():
-            return STATUS_TESTING
-
-        report = self.store.setting(SETTING_BUSY)
-
-        if report and self.now_seconds() - report["time"] < BUSY_REPORT_FRESH_SECONDS:
-            return report["reason"]
-
-        return None
+        return STATUS_TESTING if self.test_session() else None
 
     def build_app(self):
         config = self.store.setting(SETTING_CONFIG)
@@ -299,6 +292,8 @@ class Brain:
         elif name == COMMAND_SUMMARY:
             app.notifier.show(Card(*app.summary_lines()))
             text = STATUS_SHOWN
+        elif name == COMMAND_PAUSE and len(arguments) == SINGLE_VALUE_ARGUMENT_COUNT and arguments[1].isdigit():
+            text = app.pause(int(arguments[1]))
         elif name == COMMAND_DISMISS:
             text = STATUS_DISMISSED
         elif name == COMMAND_APPLY_TEST and len(arguments) == SINGLE_VALUE_ARGUMENT_COUNT:
@@ -316,7 +311,6 @@ class Brain:
 
         self.store.put_setting(SETTING_CONFIG, report["config"])
         self.store.put_setting(SETTING_TIMEZONE, report["timezone"])
-        self.store.put_setting(SETTING_BUSY, {"reason": report["busy"], "time": self.now_seconds()})
         self.zone = None
 
         return self.store.setting(SETTING_PACK_DIGEST) == report["pack_digest"]
@@ -464,6 +458,12 @@ class Brain:
 
         if command == TELEGRAM_SESSION:
             return self.telegram_session(argument.strip())
+
+        if command == TELEGRAM_PAUSE:
+            minutes = argument.strip() or str(MEETING_PAUSE_MINUTES)
+            outcome = self.command([COMMAND_PAUSE, minutes])
+
+            return self.reply(outcome["text"], outcome["text"])
 
         return self.telegram_report(command)
 

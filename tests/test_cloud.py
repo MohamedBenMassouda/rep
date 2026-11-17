@@ -2,8 +2,8 @@ import datetime
 import unittest
 import zoneinfo
 
-from rep.app import ANSWER_DONE
-from rep.cloud import (BUSY_REPORT_FRESH_SECONDS, DESKTOP_COMMAND, DESKTOP_SYNC, MAXIMUM_TEST_RESULT, NOT_CONFIGURED,
+from rep.app import ANSWER_DONE, MEETING_PAUSE_MINUTES
+from rep.cloud import (DESKTOP_COMMAND, DESKTOP_SYNC, MAXIMUM_TEST_RESULT, NOT_CONFIGURED,
                        STATUS_TESTING, TEST_NOT_RUNNING, TEST_SESSION_SECONDS, Brain, SqlStore)
 from rep.notifiers.telegram import METHOD_CLEAR_BUTTONS, METHOD_SEND
 from rep.progression import RATING_STEADY
@@ -25,7 +25,9 @@ TIMEZONE = "Africa/Tunis"
 MORNING_UTC = datetime.datetime(2026, 11, 18, 10, 0, tzinfo=datetime.timezone.utc)
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
 LONG_STREAK_DAYS = 12
-ONLY_THE_BUSY_REPORT = 1
+NO_WRITES = 0
+MEETING_LENGTH = datetime.timedelta(minutes=MEETING_PAUSE_MINUTES)
+TOO_LONG_PAUSE_MINUTES = 100000
 
 
 def telegram_calls(outcome, method):
@@ -48,14 +50,14 @@ class CloudTests(unittest.TestCase):
     def brain(self):
         return Brain(SqlStore(self.execute), OWNER_CHAT, clock=lambda: self.moment, chooser=seeded_random())
 
-    def sync_report(self, busy=None, cursor=None):
+    def sync_report(self, cursor=None):
         pack = default_pack_raw()
 
         return {"config": config_with(conditions=NO_CHECKS), "pack": pack, "pack_digest": pack_digest(pack),
-                "timezone": TIMEZONE, "busy": busy, "cursor": cursor}
+                "timezone": TIMEZONE, "cursor": cursor}
 
-    def sync(self, busy=None, cursor=None):
-        return self.brain().desktop(DESKTOP_SYNC, {"report": self.sync_report(busy, cursor)})["response"]
+    def sync(self, cursor=None):
+        return self.brain().desktop(DESKTOP_SYNC, {"report": self.sync_report(cursor)})["response"]
 
     def pending(self):
         return self.brain().store.load_state()["pending"]
@@ -293,19 +295,47 @@ class CloudTests(unittest.TestCase):
         self.assertIn(TEST_START, buttons)
         self.assertNotIn("test-window", buttons)
 
-    def test_a_fresh_busy_report_holds_challenges_back_and_a_stale_one_does_not(self):
+    def meeting_button(self, outcome):
+        return next(button["callback_data"] for call in telegram_calls(outcome, METHOD_SEND)
+                    for row in call["payload"]["reply_markup"]["inline_keyboard"] for button in row
+                    if button["text"] == "Meeting")
+
+    def test_the_meeting_button_holds_the_challenge_back_until_the_meeting_is_over(self):
+        self.sync()
+        state = self.brain().store.load_state()
+        state["last_test_day"] = self.moment.date().isoformat()
+        state["next_due"] = self.moment.timestamp()
+        self.brain().store.save_state(state)
+        button = self.meeting_button(self.command("now"))
+        token = self.pending()["token"]
+
+        self.tap(button)
+
+        self.moment += MEETING_LENGTH - datetime.timedelta(minutes=1)
+        self.assertEqual(self.brain().tick()["telegram"], [])
+
+        self.moment += datetime.timedelta(minutes=1)
+        reminder = self.brain().tick()
+        self.assertEqual(reminder["text"], "remind")
+        self.assertEqual(self.pending()["token"], token)
+
+    def test_pause_in_telegram_holds_new_challenges_back_for_that_many_minutes(self):
         self.sync()
 
-        while not self.brain().store.load_state()["next_due"]:
-            self.brain().tick()
+        self.assertIn("Paused until", self.replies(self.send("/pause 90")))
 
-        self.moment = datetime.datetime.fromtimestamp(self.brain().store.load_state()["next_due"], datetime.timezone.utc)
-        self.sync(busy="microphone in use")
+        self.moment += datetime.timedelta(minutes=89)
+        self.assertEqual(self.brain().tick()["text"], "nothing due")
 
-        self.assertEqual(self.brain().tick()["text"], "microphone in use")
+        self.moment += datetime.timedelta(minutes=1)
+        self.assertNotEqual(self.brain().tick()["text"], "nothing due")
 
-        self.moment += datetime.timedelta(seconds=BUSY_REPORT_FRESH_SECONDS)
-        self.assertNotEqual(self.brain().tick()["text"], "microphone in use")
+    def test_a_pause_longer_than_a_day_is_refused(self):
+        self.sync()
+        paused_before = self.brain().store.load_state()["paused_until"]
+
+        self.assertIn("ignored", self.replies(self.send(f"/pause {TOO_LONG_PAUSE_MINUTES}")))
+        self.assertEqual(self.brain().store.load_state()["paused_until"], paused_before)
 
     def test_a_tick_with_nothing_due_does_not_read_the_history(self):
         self.sync()
@@ -344,7 +374,7 @@ class CloudTests(unittest.TestCase):
 
         self.assertEqual(types, [EVENT_SET, EVENT_TEST])
 
-    def test_a_sync_with_an_unchanged_config_only_rewrites_the_busy_report(self):
+    def test_a_sync_with_an_unchanged_config_writes_nothing(self):
         self.sync()
         self.moment += datetime.timedelta(minutes=1)
         writes = []
@@ -353,7 +383,7 @@ class CloudTests(unittest.TestCase):
         store = SqlStore(recording)
         Brain(store, clock=lambda: self.moment).desktop(DESKTOP_SYNC, {"report": self.sync_report()})
 
-        self.assertEqual(len(writes), ONLY_THE_BUSY_REPORT)
+        self.assertEqual(len(writes), NO_WRITES)
 
     def test_todays_numbers_are_reused_until_something_changes(self):
         self.sync()

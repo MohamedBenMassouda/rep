@@ -23,6 +23,7 @@ def empty_state():
         "last_group": None,
         "stamps": {},
         "last_test_day": None,
+        "paused_until": 0,
     }
 
 

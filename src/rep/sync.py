@@ -87,10 +87,10 @@ def pack_digest(pack_raw):
     return hashlib.sha256(json.dumps(pack_raw, sort_keys=True).encode()).hexdigest()[:PACK_DIGEST_LENGTH]
 
 
-def desktop_report(paths, config, pack_raw, busy, include_pack):
+def desktop_report(paths, config, pack_raw, include_pack):
     shared_config = {section: values for section, values in config.items() if section != SYNC_SECTION}
     report = {"config": shared_config, "pack_digest": pack_digest(pack_raw), "timezone": local_timezone(),
-              "busy": busy, "cursor": read_sync_state(paths)["cursor"]}
+              "cursor": read_sync_state(paths)["cursor"]}
 
     if include_pack:
         report["pack"] = pack_raw
@@ -98,12 +98,12 @@ def desktop_report(paths, config, pack_raw, busy, include_pack):
     return report
 
 
-def send_report(client, paths, action, body, config, pack_raw, busy):
+def send_report(client, paths, action, body, config, pack_raw):
     cloud_has_pack = read_sync_state(paths).get("pack_digest") == pack_digest(pack_raw)
-    response = client.call(action, {**body, "report": desktop_report(paths, config, pack_raw, busy, not cloud_has_pack)})
+    response = client.call(action, {**body, "report": desktop_report(paths, config, pack_raw, not cloud_has_pack)})
 
     if response.get("needs_pack"):
-        response = client.call(action, {**body, "report": desktop_report(paths, config, pack_raw, busy, True)})
+        response = client.call(action, {**body, "report": desktop_report(paths, config, pack_raw, True)})
 
     write_sync_state(paths, {**read_sync_state(paths), "pack_digest": pack_digest(pack_raw)})
 
@@ -130,15 +130,15 @@ def apply_catch_up(paths, notifier, response, now_seconds):
     return len(fresh_cards)
 
 
-def desktop_tick(client, paths, config, pack_raw, notifier, busy, now_seconds):
-    response = send_report(client, paths, DESKTOP_SYNC, {}, config, pack_raw, busy)
+def desktop_tick(client, paths, config, pack_raw, notifier, now_seconds):
+    response = send_report(client, paths, DESKTOP_SYNC, {}, config, pack_raw)
     shown = apply_catch_up(paths, notifier, response, now_seconds)
 
-    return busy or f"synced, {shown} new cards"
+    return f"synced, {shown} new cards"
 
 
-def desktop_command(client, paths, config, pack_raw, notifier, busy, now_seconds, arguments):
-    response = send_report(client, paths, DESKTOP_COMMAND, {"arguments": arguments}, config, pack_raw, busy)
+def desktop_command(client, paths, config, pack_raw, notifier, now_seconds, arguments):
+    response = send_report(client, paths, DESKTOP_COMMAND, {"arguments": arguments}, config, pack_raw)
     apply_catch_up(paths, notifier, response, now_seconds)
 
     return response["text"]
