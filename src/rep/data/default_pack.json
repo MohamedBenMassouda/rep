@@ -374,7 +374,7 @@
       "cue": "Best of 5 tries. Fingers do the balancing."
     },
     "one_arm_pull_up_archer_practice": {
-      "name": "One-arm pull-up practice: archer pull-ups",
+      "name": "Archer pull-up practice",
       "unit": "reps_per_side",
       "start": 3,
       "step": 1,
@@ -382,7 +382,7 @@
       "cue": "Two sets, stop 2 reps before failure."
     },
     "one_arm_pull_up_typewriter_practice": {
-      "name": "One-arm pull-up practice: typewriters",
+      "name": "Typewriter pull-up practice",
       "unit": "reps_per_side",
       "start": 3,
       "step": 1,
@@ -412,6 +412,182 @@
       "step": 1,
       "top": 5,
       "cue": "Dead hang, pull with one arm, other hand free."
+    },
+    "tuck_front_lever": {
+      "name": "Tuck front lever",
+      "unit": "seconds",
+      "start": 8,
+      "step": 1,
+      "top": 15,
+      "cue": "Best of 4 holds. Knees to chest, arms straight, hips level with the shoulders."
+    },
+    "advanced_tuck_front_lever": {
+      "name": "Advanced tuck front lever",
+      "unit": "seconds",
+      "start": 6,
+      "step": 1,
+      "top": 15,
+      "cue": "Best of 4 holds. Back flat, thighs at 90°, pull the bar to the hips."
+    },
+    "one_leg_front_lever": {
+      "name": "One-leg front lever",
+      "unit": "seconds",
+      "start": 5,
+      "step": 1,
+      "top": 12,
+      "cue": "Best of 4 holds. One leg straight, the other tucked, switch each hold."
+    },
+    "straddle_front_lever": {
+      "name": "Straddle front lever",
+      "unit": "seconds",
+      "start": 4,
+      "step": 1,
+      "top": 10,
+      "cue": "Best of 4 holds. Legs wide and straight, body level, squeeze the glutes."
+    },
+    "front_lever": {
+      "name": "Full front lever",
+      "unit": "seconds",
+      "start": 3,
+      "step": 1,
+      "top": 10,
+      "cue": "Best of 4 holds. Legs together, one straight line from head to toe."
+    },
+    "planche_lean": {
+      "name": "Planche lean",
+      "unit": "seconds",
+      "start": 15,
+      "step": 2,
+      "top": 30,
+      "cue": "Best of 4 holds. Lean past the hands, arms locked, shoulders protracted."
+    },
+    "tuck_planche": {
+      "name": "Tuck planche",
+      "unit": "seconds",
+      "start": 6,
+      "step": 1,
+      "top": 15,
+      "cue": "Best of 4 holds. Knees to chest, hips up, push the floor away."
+    },
+    "advanced_tuck_planche": {
+      "name": "Advanced tuck planche",
+      "unit": "seconds",
+      "start": 5,
+      "step": 1,
+      "top": 12,
+      "cue": "Best of 4 holds. Back flat, hips at shoulder height, arms locked."
+    },
+    "straddle_planche": {
+      "name": "Straddle planche",
+      "unit": "seconds",
+      "start": 3,
+      "step": 1,
+      "top": 10,
+      "cue": "Best of 4 holds. Legs wide and straight, lean far forward."
+    },
+    "full_planche": {
+      "name": "Full planche",
+      "unit": "seconds",
+      "start": 2,
+      "step": 1,
+      "top": 8,
+      "cue": "Best of 4 holds. Legs together, body level, arms straight."
+    },
+    "vertical_flag": {
+      "name": "Vertical flag",
+      "unit": "seconds",
+      "start": 8,
+      "step": 1,
+      "top": 15,
+      "cue": "Best of 4 holds. Bottom arm pushes, top arm pulls, body straight up."
+    },
+    "tuck_flag": {
+      "name": "Tuck human flag",
+      "unit": "seconds",
+      "start": 5,
+      "step": 1,
+      "top": 12,
+      "cue": "Best of 4 holds per side. Knees tucked, hips level with the hands."
+    },
+    "straddle_flag": {
+      "name": "Straddle human flag",
+      "unit": "seconds",
+      "start": 4,
+      "step": 1,
+      "top": 10,
+      "cue": "Best of 4 holds per side. Legs wide, push and pull hard."
+    },
+    "human_flag": {
+      "name": "Full human flag",
+      "unit": "seconds",
+      "start": 3,
+      "step": 1,
+      "top": 10,
+      "cue": "Best of 4 holds per side. Legs together, body level."
+    },
+    "tuck_back_lever": {
+      "name": "Tuck back lever",
+      "unit": "seconds",
+      "start": 8,
+      "step": 1,
+      "top": 15,
+      "cue": "Best of 4 holds. Skin-the-cat in, knees tucked, arms straight."
+    },
+    "advanced_tuck_back_lever": {
+      "name": "Advanced tuck back lever",
+      "unit": "seconds",
+      "start": 6,
+      "step": 1,
+      "top": 15,
+      "cue": "Best of 4 holds. Back flat, hips open, chest down."
+    },
+    "straddle_back_lever": {
+      "name": "Straddle back lever",
+      "unit": "seconds",
+      "start": 4,
+      "step": 1,
+      "top": 12,
+      "cue": "Best of 4 holds. Legs wide and straight, body level."
+    },
+    "back_lever": {
+      "name": "Full back lever",
+      "unit": "seconds",
+      "start": 3,
+      "step": 1,
+      "top": 10,
+      "cue": "Best of 4 holds. Legs together, glutes tight, body level."
+    },
+    "box_pistol_squat": {
+      "name": "Box pistol squats",
+      "unit": "reps_per_side",
+      "start": 5,
+      "step": 1,
+      "top": 10,
+      "cue": "Sit back to a knee-high box on one leg, stand without rocking."
+    },
+    "assisted_pistol_squat": {
+      "name": "Assisted pistol squats",
+      "unit": "reps_per_side",
+      "start": 5,
+      "step": 1,
+      "top": 10,
+      "cue": "Hold a door frame lightly, full depth, help as little as you can."
+    },
+    "pistol_squat_negative": {
+      "name": "Pistol squat negatives (5 s)",
+      "unit": "reps_per_side",
+      "start": 3,
+      "step": 1,
+      "top": 8,
+      "cue": "Lower on one leg for 5 s, stand up on both."
+    },
+    "pistol_squat_practice": {
+      "name": "Pistol squat practice",
+      "unit": "reps_per_side",
+      "start": 1,
+      "step": 1,
+      "top": 5,
+      "cue": "Full depth, heel down, arms forward. Stop while it's clean."
     }
   },
   "ladders": {
@@ -501,6 +677,53 @@
         "towel_assisted_one_arm_pull_up",
         "one_arm_pull_up_negative",
         "one_arm_pull_up"
+      ]
+    },
+    "front_lever": {
+      "title": "Front lever",
+      "ladder": [
+        "tuck_front_lever",
+        "advanced_tuck_front_lever",
+        "one_leg_front_lever",
+        "straddle_front_lever",
+        "front_lever"
+      ]
+    },
+    "planche": {
+      "title": "Planche",
+      "ladder": [
+        "planche_lean",
+        "tuck_planche",
+        "advanced_tuck_planche",
+        "straddle_planche",
+        "full_planche"
+      ]
+    },
+    "human_flag": {
+      "title": "Human flag",
+      "ladder": [
+        "vertical_flag",
+        "tuck_flag",
+        "straddle_flag",
+        "human_flag"
+      ]
+    },
+    "back_lever": {
+      "title": "Back lever",
+      "ladder": [
+        "tuck_back_lever",
+        "advanced_tuck_back_lever",
+        "straddle_back_lever",
+        "back_lever"
+      ]
+    },
+    "pistol_squat": {
+      "title": "Pistol squat",
+      "ladder": [
+        "box_pistol_squat",
+        "assisted_pistol_squat",
+        "pistol_squat_negative",
+        "pistol_squat_practice"
       ]
     }
   },
