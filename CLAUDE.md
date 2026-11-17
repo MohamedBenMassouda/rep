@@ -41,7 +41,9 @@ first (it owns the Durable Object class `rep-api` binds to), then `front/`. It n
 secrets `CLOUDFLARE_API_TOKEN` (an "Edit Cloudflare Workers" token limited to the Personal
 account) and `CLOUDFLARE_ACCOUNT_ID`. Forks and other branches never deploy.
 
-Branches are `<topic>/<short-slug>` when not working on `main`. There is no PR template. Commits
+Branches are `<topic>/<short-slug>`. `main` is protected by the "protect main" ruleset: no direct
+pushes, force-pushes or deletion. Every change goes through a pull request (`gh pr create`) with
+the four `unittest` jobs green, and only the owner merges it. Never merge a PR yourself. There is no PR template. Commits
 are small conventional commits (`feat(scheduler): …`, `fix(app): …`, `test: …`) with no AI
 co-author or attribution.
 
