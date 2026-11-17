@@ -4,12 +4,13 @@ from pathlib import Path
 
 from rep.app import ANSWER_DONE, ANSWER_LATER, ANSWER_SKIP, App
 from rep.paths import Paths
-from rep.progression import RATING_EASY, Challenge, KIND_HARD
+from rep.progression import RATING_EASY, Challenge, KIND_HARD, target_of
 from rep.store import EVENT_SESSION, EVENT_SET, EVENT_SKIP, load_events
 from tests.helpers import FIXED_NOW, config_with, default_pack, seeded_random
 
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
 PUSH_CHALLENGE = Challenge(KIND_HARD, "push", "push_up", "clap_push_up")
+REPS_DONE = 30
 
 
 class RecordingNotifier:
@@ -52,6 +53,26 @@ class AppTests(unittest.TestCase):
         sets = [event for event in load_events(self.paths) if event["type"] == EVENT_SET]
         self.assertEqual(len(sets), 1)
         self.assertTrue(result.startswith("ignored"))
+
+    def test_the_reps_actually_done_are_logged_and_the_next_target_grows_from_them(self):
+        self.app.start_challenge(PUSH_CHALLENGE)
+        token = self.token()
+
+        self.app.answer(token, ANSWER_DONE)
+        self.fresh_app().rate(token, RATING_EASY, REPS_DONE)
+
+        sets = [event for event in load_events(self.paths) if event["type"] == EVENT_SET]
+        self.assertEqual(sets[0]["amount"], REPS_DONE)
+        step = self.app.pack.exercises["clap_push_up"].step
+        self.assertEqual(self.fresh_app().state["targets"]["clap_push_up"], REPS_DONE + step)
+
+    def test_the_rating_card_asks_for_the_reps_done_starting_from_the_target(self):
+        self.app.start_challenge(PUSH_CHALLENGE)
+        target = target_of(self.app.state, self.app.pack, "clap_push_up", self.app.scale)
+
+        self.app.answer(self.token(), ANSWER_DONE)
+
+        self.assertEqual(self.notifier.cards[-1].done_prompt, target)
 
     def test_an_answer_with_an_old_token_is_ignored(self):
         self.app.start_challenge(PUSH_CHALLENGE)

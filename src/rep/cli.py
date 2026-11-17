@@ -140,6 +140,7 @@ def parser():
     rate = commands.add_parser("rate", help="say how many reps were left")
     rate.add_argument("token")
     rate.add_argument("rating", type=int, choices=RATINGS)
+    rate.add_argument("done", type=int, nargs="?", help="reps (or seconds) you actually did")
     session = commands.add_parser("session", help="log a training session today")
     setattr(session.add_argument("kind"), COMPLETION_COMMAND, ("routine", "--names"))
     routine = commands.add_parser("routine", help="your training days and the muscles each one trains")
@@ -186,7 +187,7 @@ def dispatch(paths, arguments):
     elif command == "answer":
         print(build_app(paths).answer(arguments.token, arguments.answer))
     elif command == "rate":
-        print(build_app(paths).rate(arguments.token, arguments.rating))
+        print(build_app(paths).rate(arguments.token, arguments.rating, arguments.done))
     elif command == "routine":
         command_routine(build_app(paths), arguments)
     elif command == "session":

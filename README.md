@@ -9,8 +9,9 @@ pull-up. You answer from the notification, and your targets move with you.
 - **Ladders instead of more weight.** Each movement climbs a ladder of harder variations:
   pull-ups go chest-to-bar → explosive → archer → typewriter; push-ups go clap → archer →
   pseudo-planche → one-arm. Reaching the top of a rung unlocks the next one.
-- **Answers that steer progression.** Done / Skip / Later, then "how many reps were left?":
-  3+ left raises the target, three steady sets in a row raise it, failure keeps it.
+- **Answers that steer progression.** Done / Skip / Later, then "how many reps were left?",
+  with the reps you actually did if they differ from the target. The next target starts from what
+  you did: easy raises it, three steady sets in a row raise it, failure keeps it.
 - **Your training days count.** Describe your split once (`push: chest, shoulders, triceps`…),
   log a day with `rep session push`, and that day's challenges skip those muscle groups, count
   towards the weekly caps and lean towards skill practice.

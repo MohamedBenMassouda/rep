@@ -141,7 +141,7 @@ its state transition runs again from the top:
   `best`, `pending` and every event. Renaming one in a pack orphans its history; migrate the
   state and events in the same change.
 - **The button argv is an interface.** Notifiers run `rep answer <token> done|skip|later`,
-  `rep rate <token> 3|1|0`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
+  `rep rate <token> 3|1|0 [reps done]`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
   through the hidden `rep await-notification <json>`.
 - **`rep today` output is read by widgets.** The keys are `done`, `streak`, `trained`,
   `sessions` (day name → muscles text) and `skills`.

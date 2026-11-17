@@ -147,8 +147,9 @@ class App:
         exercise = self.pack.exercises[pending["exercise"]]
         buttons = tuple(Button(label, glyph, ("rate", pending["token"], str(rating)))
                         for (label, rating), glyph in zip(RATING_LABELS[pending["kind"]], RATING_GLYPHS))
+        target = target_of(self.state, self.pack, exercise.identifier, self.scale)
         self.notifier.show(Card("How many reps were left?", f"{exercise.name} · {self.amount(exercise.identifier)}",
-                                True, buttons))
+                                True, buttons, done_prompt=target))
 
     def matching_pending(self, token, stage):
         pending = self.state.get("pending")
@@ -182,7 +183,7 @@ class App:
 
         return answer
 
-    def rate(self, token, rating):
+    def rate(self, token, rating, done=None):
         pending = self.matching_pending(token, STAGE_RATE)
 
         if pending is None:
@@ -190,10 +191,11 @@ class App:
 
         exercise_identifier = pending["exercise"]
         target_before = target_of(self.state, self.pack, exercise_identifier, self.scale)
-        unlocked = apply_rating(self.state, self.pack, exercise_identifier, rating, self.scale)
+        unlocked = apply_rating(self.state, self.pack, exercise_identifier, rating, self.scale, done)
+        amount = target_before if done is None else done
 
         if pending["kind"] == KIND_BOSS and rating >= RATING_EASY:
-            self.state["best"][exercise_identifier] = target_before
+            self.state["best"][exercise_identifier] = amount
 
         if pending["kind"] != KIND_SKILL:
             self.state["last_group"] = pending["group"]
@@ -202,7 +204,7 @@ class App:
         self.state["next_due"] = self.clock().timestamp() + self.next_gap_seconds()
         self.save()
         self.record(EVENT_SET, kind=pending["kind"], group=pending["group"], ladder=pending["ladder"],
-                    exercise=exercise_identifier, amount=target_before, rating=rating)
+                    exercise=exercise_identifier, amount=amount, rating=rating)
         self.show_result(exercise_identifier, unlocked)
 
         return "rated"

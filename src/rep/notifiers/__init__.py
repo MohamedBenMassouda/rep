@@ -20,6 +20,7 @@ class Card:
     body: str
     sticky: bool = False
     buttons: tuple = field(default_factory=tuple)
+    done_prompt: int | None = None
 
 
 def rep_command():
