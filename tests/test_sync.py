@@ -7,8 +7,8 @@ from pathlib import Path
 from rep.cloud import Brain, SqlStore
 from rep.paths import Paths
 from rep.launcher import cached_today
-from rep.sync import (CARD_FRESH_SECONDS, SyncClient, desktop_command, desktop_tick, read_sync_state,
-                      write_sync_state)
+from rep.sync import (CARD_FRESH_SECONDS, USER_AGENT, SyncClient, desktop_command, desktop_tick, read_sync_state,
+                      sync_request, write_sync_state)
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
 
 TOKEN = "desktop-secret"
@@ -130,6 +130,11 @@ class SyncTests(unittest.TestCase):
 
         self.assertEqual(len(self.notifier.cards), 1)
         self.assertLess(read_sync_state(self.paths)["cursor"], FAR_AHEAD_CURSOR)
+
+    def test_requests_name_rep_so_cloudflare_does_not_block_the_python_default_agent(self):
+        request = sync_request(CLOUD_URL, {}, TOKEN)
+
+        self.assertEqual(request.get_header("User-agent"), USER_AGENT)
 
     def test_the_sync_token_stays_on_the_desktop(self):
         self.tick()

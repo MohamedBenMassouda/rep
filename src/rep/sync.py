@@ -17,16 +17,21 @@ ZONEINFO_MARKER = "zoneinfo/"
 DEFAULT_TIMEZONE = "UTC"
 AUTHORIZATION_SCHEME = "Bearer "
 JSON_CONTENT_TYPE = "application/json"
+USER_AGENT = "rep-desktop"
 
 
 class SyncError(RuntimeError):
     pass
 
 
+def sync_request(url, body, token):
+    return urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                  headers={"Authorization": AUTHORIZATION_SCHEME + token,
+                                           "Content-Type": JSON_CONTENT_TYPE, "User-Agent": USER_AGENT})
+
+
 def urllib_post(url, body, token):
-    request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                     headers={"Authorization": AUTHORIZATION_SCHEME + token,
-                                              "Content-Type": JSON_CONTENT_TYPE})
+    request = sync_request(url, body, token)
 
     try:
         with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:

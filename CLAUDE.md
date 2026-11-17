@@ -231,6 +231,8 @@ are in `tests/helpers.py`, including `sqlite_execute()` for the cloud store.
   `src/rep` instead. Use `rsync -a`, not `cp`: rewriting the files retriggers the dev watcher and
   rebuilds in a loop.
 - In a Python Worker, `sql.exec(...).toArray()` already returns a Python list.
+- Cloudflare answers Python's default `Python-urllib` user agent with error 1010 (403). Desktop
+  sync requests send `USER_AGENT`; keep it on every request.
 
 ## Working style
 
