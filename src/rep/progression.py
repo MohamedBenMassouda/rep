@@ -40,10 +40,10 @@ def current_exercise(state, ladder):
     return ladder.exercise_identifiers[rung]
 
 
-def apply_rating(state, pack, exercise_identifier, rating, scale):
+def apply_rating(state, pack, exercise_identifier, rating, scale, done=None):
     exercise = pack.exercises[exercise_identifier]
     ladder = pack.ladder_containing(exercise_identifier)
-    target = target_of(state, pack, exercise_identifier, scale)
+    target = target_of(state, pack, exercise_identifier, scale) if done is None else max(MINIMUM_TARGET, done)
     steady = state["steady_answers"].get(exercise_identifier, 0)
 
     if rating >= RATING_EASY:

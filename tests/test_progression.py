@@ -8,6 +8,10 @@ from tests.helpers import ADVANCED_SCALE, FIXED_NOW, config_with, default_pack, 
 
 PULL_UP_START = 10
 LADDER_TOP_MINUS_ONE = 14
+REPS_DONE_ABOVE_TARGET = 13
+REPS_DONE_BELOW_TARGET = 6
+RATING_SEQUENCE = (RATING_STEADY, RATING_STEADY, RATING_FAILURE, RATING_STEADY, RATING_STEADY, RATING_STEADY,
+                   RATING_EASY, RATING_EASY, RATING_EASY, RATING_EASY)
 CHOICES_TO_SAMPLE = 60
 
 
@@ -16,13 +20,40 @@ class RatingTests(unittest.TestCase):
         self.pack = default_pack()
         self.state = fresh_state()
 
-    def rate(self, rating, exercise="chest_to_bar_pull_up"):
-        return apply_rating(self.state, self.pack, exercise, rating, ADVANCED_SCALE)
+    def rate(self, rating, exercise="chest_to_bar_pull_up", done=None):
+        return apply_rating(self.state, self.pack, exercise, rating, ADVANCED_SCALE, done)
 
     def test_an_easy_set_raises_the_target_by_one_step(self):
         self.rate(RATING_EASY)
 
         self.assertEqual(target_of(self.state, self.pack, "chest_to_bar_pull_up", ADVANCED_SCALE), PULL_UP_START + 1)
+
+    def test_an_easy_set_with_more_reps_done_than_asked_raises_the_target_from_those_reps(self):
+        self.rate(RATING_EASY, done=REPS_DONE_ABOVE_TARGET)
+
+        self.assertEqual(target_of(self.state, self.pack, "chest_to_bar_pull_up", ADVANCED_SCALE),
+                         REPS_DONE_ABOVE_TARGET + 1)
+
+    def test_a_steady_set_with_more_reps_done_than_asked_makes_those_reps_the_target(self):
+        self.rate(RATING_STEADY, done=REPS_DONE_ABOVE_TARGET)
+
+        self.assertEqual(target_of(self.state, self.pack, "chest_to_bar_pull_up", ADVANCED_SCALE), REPS_DONE_ABOVE_TARGET)
+
+    def test_a_failed_set_with_fewer_reps_done_lowers_the_target_to_those_reps(self):
+        self.rate(RATING_FAILURE, done=REPS_DONE_BELOW_TARGET)
+
+        self.assertEqual(target_of(self.state, self.pack, "chest_to_bar_pull_up", ADVANCED_SCALE), REPS_DONE_BELOW_TARGET)
+
+    def test_typing_exactly_the_target_counts_the_same_as_typing_nothing(self):
+        typed_state, untyped_state = fresh_state(), fresh_state()
+
+        for rating in RATING_SEQUENCE:
+            typed = target_of(typed_state, self.pack, "chest_to_bar_pull_up", ADVANCED_SCALE)
+            typed_unlock = apply_rating(typed_state, self.pack, "chest_to_bar_pull_up", rating, ADVANCED_SCALE, typed)
+            untyped_unlock = apply_rating(untyped_state, self.pack, "chest_to_bar_pull_up", rating, ADVANCED_SCALE)
+
+            self.assertEqual(typed_unlock, untyped_unlock)
+            self.assertEqual(typed_state, untyped_state)
 
     def test_three_steady_sets_in_a_row_raise_the_target(self):
         for _ in range(2):
