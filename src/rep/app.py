@@ -1,7 +1,7 @@
 import datetime
 import secrets
 
-from rep.catalog import SKILL_GROUP, format_amount
+from rep.catalog import SKILL_GROUP, format_amount, skill_progress
 from rep.conditions import busy_reason
 from rep.config import level_scale, protein_range_grams
 from rep.lines import line_for
@@ -132,8 +132,8 @@ class App:
             line = self.line("boss")
         elif pending["kind"] == KIND_SKILL:
             skill = self.pack.skills[pending["ladder"]]
-            title = f"Skill · {skill.title}: {exercise.name} · {self.amount(exercise.identifier)}"
-            line = "Stay fresh, stop well before failure."
+            title = f"Skill · {exercise.name}: {self.amount(exercise.identifier)}"
+            line = f"{skill_progress(self.pack, skill, exercise.identifier)}. Stay fresh, stop well before failure."
         else:
             title = f"{exercise.name}: {self.amount(exercise.identifier)}"
             line = self.line("challenge")

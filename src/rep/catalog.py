@@ -68,6 +68,20 @@ def format_amount(exercise, target):
     return f"{target} {suffix}" if exercise.unit != "seconds" else f"{target}{suffix}"
 
 
+def skill_progress(pack, ladder, exercise_identifier):
+    exercise = pack.exercises[exercise_identifier]
+    position = ladder.exercise_identifiers.index(exercise_identifier)
+    step = f"Step {position + 1} of {len(ladder.exercise_identifiers)} to the {ladder.title}"
+    has_next_rung = position + 1 < len(ladder.exercise_identifiers)
+
+    if not has_next_rung:
+        return f"{step}, the skill itself"
+
+    next_exercise = pack.exercises[ladder.exercise_identifiers[position + 1]]
+
+    return f"{step}. {format_amount(exercise, exercise.top)} unlocks {next_exercise.name}"
+
+
 def load_pack(pack_file=None):
     if pack_file is None:
         raw_text = resources.files("rep.data").joinpath(DEFAULT_PACK_RESOURCE).read_text()
