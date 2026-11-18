@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rep.cloud import DESKTOP_COMMAND, DESKTOP_SYNC
 from rep.notifiers import card_from_dict
+from rep.web import METHOD_POST, bearer_headers
 
 SYNC_FILE_NAME = "sync.json"
 SYNC_SECTION = "sync"
@@ -16,9 +17,6 @@ CARD_FRESH_SECONDS = 600
 LOCALTIME_LINK = Path("/etc/localtime")
 ZONEINFO_MARKER = "zoneinfo/"
 DEFAULT_TIMEZONE = "UTC"
-AUTHORIZATION_SCHEME = "Bearer "
-JSON_CONTENT_TYPE = "application/json"
-USER_AGENT = "rep-desktop"
 PACK_DIGEST_LENGTH = 16
 
 
@@ -27,9 +25,7 @@ class SyncError(RuntimeError):
 
 
 def sync_request(url, body, token):
-    return urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                  headers={"Authorization": AUTHORIZATION_SCHEME + token,
-                                           "Content-Type": JSON_CONTENT_TYPE, "User-Agent": USER_AGENT})
+    return urllib.request.Request(url, data=json.dumps(body).encode(), method=METHOD_POST, headers=bearer_headers(token))
 
 
 def urllib_post(url, body, token):
