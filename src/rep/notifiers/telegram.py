@@ -6,13 +6,14 @@ API_ROOT = "https://api.telegram.org/bot"
 CALLBACK_SEPARATOR = " "
 TEST_START = "test-start"
 TEST_STEP = "test-step"
-PHONE_COMMANDS = ("answer", "rate", "dismiss", "session", "pause")
+PHONE_COMMANDS = ("answer", "rate", "dismiss", "session", "pause", "rest")
 PHONE_REPLACEMENTS = {"test-window": ("Start here", (TEST_START,))}
 TEST_CALLBACKS = (TEST_START, TEST_STEP)
 MESSAGE_LIMIT = 4096
 CALLBACK_DATA_LIMIT = 64
 SESSION_COMMAND = "session"
 BUTTONS_PER_ROW = 2
+ONE_PER_ROW = 1
 NO_SESSIONS_TEXT = "No training days yet: add a routine with `rep init` on your desktop."
 SESSION_PROMPT = "Which training day did you do?"
 METHOD_SEND = "sendMessage"
@@ -99,25 +100,27 @@ def send_long_text(chat_id, text):
     return [send_text(chat_id, chunk) for chunk in split_message(text)]
 
 
-def session_picker(chat_id, session_names):
-    buttons = [{"text": name, "callback_data": f"{SESSION_COMMAND}{CALLBACK_SEPARATOR}{name}"} for name in session_names
-               if len(f"{SESSION_COMMAND}{CALLBACK_SEPARATOR}{name}".encode()) <= CALLBACK_DATA_LIMIT]
-
-    if not buttons:
-        return send_text(chat_id, NO_SESSIONS_TEXT)
-
-    rows = [buttons[start:start + BUTTONS_PER_ROW] for start in range(0, len(buttons), BUTTONS_PER_ROW)]
-
-    return {"method": METHOD_SEND, "payload": {"chat_id": chat_id, "text": SESSION_PROMPT,
-                                               "reply_markup": {"inline_keyboard": rows}}, "remember": False}
-
-
-def step_picker(chat_id, text, options):
-    rows = [[{"text": f"{number}. {name}", "callback_data": f"{TEST_STEP}{CALLBACK_SEPARATOR}{number}"}]
-            for number, name in enumerate(options, start=1)]
+def picker(chat_id, text, choices, per_row):
+    buttons = [{"text": label, "callback_data": data} for label, data in choices
+               if len(data.encode()) <= CALLBACK_DATA_LIMIT]
+    rows = [buttons[start:start + per_row] for start in range(0, len(buttons), per_row)]
 
     return {"method": METHOD_SEND, "payload": {"chat_id": chat_id, "text": text,
                                                "reply_markup": {"inline_keyboard": rows}}, "remember": False}
+
+
+def session_picker(chat_id, session_names):
+    choices = [(name, f"{SESSION_COMMAND}{CALLBACK_SEPARATOR}{name}") for name in session_names]
+    sent = picker(chat_id, SESSION_PROMPT, choices, BUTTONS_PER_ROW)
+
+    return sent if sent["payload"]["reply_markup"]["inline_keyboard"] else send_text(chat_id, NO_SESSIONS_TEXT)
+
+
+def step_picker(chat_id, text, options):
+    choices = [(f"{number}. {name}", f"{TEST_STEP}{CALLBACK_SEPARATOR}{number}")
+               for number, name in enumerate(options, start=1)]
+
+    return picker(chat_id, text, choices, ONE_PER_ROW)
 
 
 def today_text(today):

@@ -121,25 +121,31 @@ def rotation_from(groups, last_group):
     return list(groups[start:]) + list(groups[:start])
 
 
+def resting_groups(state, today):
+    return {group for group, until in state["rested"].items() if until > today.isoformat()}
+
+
 def choose_challenge(state, pack, training, profile_skills, events, now, chooser):
     today = now.date()
     session_groups = {session: tuple(allowance) for session, allowance in training["session_allowances"].items()}
+    resting = resting_groups(state, today)
     trained = trained_groups(events, session_groups, today)
     usage = cap_usage(events, pack.groups, training["session_allowances"], today)
     is_rest_day = not trained
-    skills = [pack.skills[skill] for skill in profile_skills if skill in pack.skills]
-    boss_allowed = (is_rest_day and pack.bosses and now.hour >= training["boss_after_hour"]
+    skills = [] if SKILL_GROUP in resting else [pack.skills[skill] for skill in profile_skills if skill in pack.skills]
+    bosses = [boss for boss in pack.bosses if pack.ladder_containing(boss).group not in resting]
+    boss_allowed = (is_rest_day and bosses and now.hour >= training["boss_after_hour"]
                     and not boss_done_this_week(events, today))
 
     if boss_allowed and chooser.random() < training["boss_chance"]:
-        exercise_identifier = chooser.choice(pack.bosses)
+        exercise_identifier = chooser.choice(bosses)
         ladder = pack.ladder_containing(exercise_identifier)
 
         return Challenge(KIND_BOSS, ladder.group, ladder.identifier, exercise_identifier)
 
     skill_share = training["skill_share_rest_day"] if is_rest_day else training["skill_share_training_day"]
     open_groups = [group for group in rotation_from(pack.groups, state.get("last_group"))
-                   if group not in trained and usage[group] < training["weekly_caps"].get(group, 0)]
+                   if group not in trained | resting and usage[group] < training["weekly_caps"].get(group, 0)]
     wants_skill = bool(skills) and chooser.random() < skill_share
 
     if wants_skill or not open_groups:

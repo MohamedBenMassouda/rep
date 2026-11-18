@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rep.app import ANSWER_DONE, ANSWER_LATER, ANSWER_SKIP, App
+from rep.app import ANSWER_DONE, ANSWER_LATER, ANSWER_SKIP, STAGE_RATE, App
 from rep.away import HOME
 from rep.paths import Paths
 from rep.progression import RATING_EASY, Challenge, KIND_HARD, target_of
@@ -12,6 +12,7 @@ from tests.helpers import FIXED_NOW, config_with, default_pack, seeded_random
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
 PUSH_CHALLENGE = Challenge(KIND_HARD, "push", "push_up", "clap_push_up")
 REPS_DONE = 30
+REST_DAYS = 3
 AWAY_HOUR = "14"
 OLD_AWAY_DAY = "2026-11-01"
 
@@ -132,6 +133,37 @@ class AppTests(unittest.TestCase):
         self.assertTrue(self.app.away("someday", AWAY_HOUR).startswith("ignored"))
         self.assertTrue(self.app.away("friday", "25").startswith("ignored"))
         self.assertEqual(self.fresh_app().state["away_days"], {})
+
+    def test_a_group_rests_for_some_days_and_zero_days_bring_it_back(self):
+        self.app.state["rested"] = {"legs": "2026-11-01"}
+
+        self.app.rest("push", REST_DAYS)
+        self.assertEqual(self.fresh_app().state["rested"], {"push": "2026-11-21"})
+        self.fresh_app().rest("push", 0)
+
+        self.assertEqual(self.fresh_app().state["rested"], {})
+        self.assertTrue(self.app.rest("arms", REST_DAYS).startswith("ignored"))
+
+    def test_a_set_logged_in_one_go_from_the_card_question_records_one_set(self):
+        self.app.start_challenge(PUSH_CHALLENGE)
+        token = self.token()
+
+        self.app.log_set(token, RATING_EASY, REPS_DONE)
+        repeated = self.fresh_app().log_set(token, RATING_EASY, REPS_DONE)
+
+        sets = [event for event in load_events(self.paths) if event["type"] == EVENT_SET]
+        self.assertEqual([event["amount"] for event in sets], [REPS_DONE])
+        self.assertTrue(repeated.startswith("ignored"))
+
+    def test_noted_reps_move_the_card_to_its_rating_and_wait_for_it(self):
+        self.app.start_challenge(PUSH_CHALLENGE)
+        token = self.token()
+
+        self.app.note_reps(token, REPS_DONE)
+
+        pending = self.fresh_app().state["pending"]
+        self.assertEqual((pending["stage"], pending["typed"]), (STAGE_RATE, REPS_DONE))
+        self.assertEqual(self.notifier.cards[-1].title, "How many reps were left?")
 
     def test_the_state_survives_a_restart_between_the_two_answer_steps(self):
         self.app.start_challenge(PUSH_CHALLENGE)
