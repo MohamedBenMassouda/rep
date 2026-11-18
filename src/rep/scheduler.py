@@ -1,6 +1,7 @@
 import datetime
 from dataclasses import dataclass
 
+from rep.away import end_hour_on
 from rep.progression import choose_challenge
 from rep.store import EVENT_TEST
 
@@ -49,8 +50,8 @@ def retest_due(state, events, today, retest_days):
     return last_test is None or (today - last_test).days >= retest_days
 
 
-def within_active_hours(now, schedule):
-    return schedule["start_hour"] <= now.hour < schedule["end_hour"]
+def within_active_hours(now, schedule, away_days):
+    return schedule["start_hour"] <= now.hour < end_hour_on(now.date(), schedule, away_days)
 
 
 def decide(now, state, config, pack, events, busy_reason, chooser):
@@ -68,7 +69,7 @@ def decide(now, state, config, pack, events, busy_reason, chooser):
     if clock_time_reached(now, nudges["summary"]) and not stamped_today(state, STAMP_SUMMARY, today):
         return Decision(ACTION_SUMMARY)
 
-    if not within_active_hours(now, schedule):
+    if not within_active_hours(now, schedule, state["away_days"]):
         return None
 
     if not stamped_today(state, STAMP_RETEST, today) and retest_due(state, events, today, config["training"]["retest_days"]):

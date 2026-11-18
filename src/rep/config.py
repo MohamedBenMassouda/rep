@@ -16,6 +16,7 @@ DEFAULTS = {
         "first_challenge_minutes": [5, 30],
         "snooze_minutes": 10,
         "reminder_minutes": 15,
+        "away": {},
     },
     "training": {
         "weekly_caps": {"push": 10, "pull": 10, "legs": 6, "core": 6},

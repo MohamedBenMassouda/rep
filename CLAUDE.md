@@ -113,8 +113,9 @@ exposing `show(card)`. Desktop-specific code stays in `src/rep/notifiers/<backen
 - **`scheduler.decide()`** is pure: given `now`, state, config, pack, events, the busy reason
   and a random source, it returns a `Decision` and changes nothing. Order: nothing while
   `state["paused_until"]` is ahead (`App.pause()`), nudges (protein,
-  bedtime), summary, then outside active hours nothing, retest reminder, first-run scheduling,
-  "not due or busy", remind the pending card after `reminder_minutes`, else a new challenge.
+  bedtime), summary, then outside active hours nothing (an away day ends early:
+  `away.end_hour_on()`, a one-off `state["away_days"]` entry beating the weekly `[schedule] away`),
+  retest reminder, first-run scheduling, "not due or busy", remind the pending card after `reminder_minutes`, else a new challenge.
 - **`progression`** is pure too: `apply_rating()` (3+ left raises the target, three steady sets
   in a row raise it, failure resets the run, reaching `top` moves the ladder), `cap_usage()`,
   `choose_challenge()`, `streak_days()`.
@@ -162,7 +163,7 @@ its state transition runs again from the top:
   spaces as `callback_data` (64 bytes at most); the phone only offers `PHONE_COMMANDS`.
 - **Reps typed in Telegram** wait in `pending["typed"]` until the rating; `App.rate()` uses them when
   the button carries no reps.
-- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/pause`, `/help`)
+- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/pause`, `/away`, `/help`)
   answer in plain text, never `parse_mode`, and are split at `MESSAGE_LIMIT`. Stats for the phone
   come from `charts.phone_stats_text()`, which shares its rows with the terminal's `stats_text()`.
 - **The max test in Telegram** keeps its progress in the `max_test` setting (absolute position and

@@ -21,6 +21,8 @@ pull-up. You answer from the notification, and your targets move with you.
 - **Waits when you're busy:** a call or recording using the mic, screen sharing, or any pause file
   you name (e.g. a focus timer or the lock screen). In a meeting, tap **Meeting** on a card or run
   `rep pause [minutes]`: nothing is sent until it's over, then the card comes back.
+- **Days you're out:** name the weekdays you leave home (`tuesday = 14`) or one day at a time
+  (`rep away friday 15`, `/away tomorrow 14`), and challenges stop at that hour.
 - **Works on any Linux desktop:** standard notifications with buttons, a
   [Quickshell](https://quickshell.org) flyout when available, or the terminal.
 - **On your phone too (optional):** free Cloudflare Workers run the schedule and send every
@@ -44,6 +46,7 @@ and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE
 |---|---|
 | `rep now` | a challenge right now |
 | `rep pause [MINUTES]` | nothing for 60 minutes (or MINUTES, up to a day); `rep pause 0` resumes |
+| `rep away [DAY HOUR]` | out on DAY (`today`, `tomorrow`, a weekday or `YYYY-MM-DD`): challenges stop at HOUR; `rep away friday home` undoes it; no arguments lists your away days |
 | `rep session DAY` | log one of your training days today (`upper`, `legs`, `full` without a routine) |
 | `rep routine [--names]` | your training days, their muscles and what they count as |
 | `rep stats [--history]` | targets, ladders, weekly caps; `--history` adds progress charts and compares max tests |
@@ -98,7 +101,7 @@ per muscle against those groups' weekly caps and skips them for that day's chall
 | Section | Settings |
 |---|---|
 | `[profile]` | `body_weight_kg`, `level` (beginner / intermediate / advanced), `skills` |
-| `[schedule]` | `start_hour`, `end_hour`, gap between challenges, `snooze_minutes`, `reminder_minutes` |
+| `[schedule]` | `start_hour`, `end_hour`, `away` (weekdays you're out and the hour challenges stop, e.g. `{ tuesday = 14 }`), gap between challenges, `snooze_minutes`, `reminder_minutes` |
 | `[training]` | `routine`, `sets_per_muscle`, `weekly_caps`, `session_allowances` (used when there is no routine), skill share on training / rest days, boss settings, `streak_minimum`, `retest_days`, `pack_file` |
 | `[nudges]` | `protein`, `bedtime`, `summary` times (`HH:MM` or `off`) |
 | `[display]` | `notifier` (auto / quickshell / desktop / terminal), `quickshell_kind`, `line_command` |
@@ -137,7 +140,8 @@ In Telegram, tap the buttons as usual. While a set waits for its rating, send th
 number before tapping how it felt. The bot also takes `/now` (a challenge right away), `/session`
 (log a training day from buttons, or `/session chest-day`), `/today`, `/stats`, `/routine`,
 `/summary`, `/test` (the max test, one question at a time; `/skip` and `/cancel` work during it),
-`/pause` (nothing for 60 minutes, `/pause 90` for longer, `/pause 0` to resume) and `/help`. Export and import stay on the desktop.
+`/pause` (nothing for 60 minutes, `/pause 90` for longer, `/pause 0` to resume), `/away` (your away
+days; `/away tomorrow 14` stops challenges at 14:00 that day, `/away friday home` undoes it) and `/help`. Export and import stay on the desktop.
 
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
@@ -181,6 +185,7 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
      {"command": "summary", "description": "today's summary"},
      {"command": "test", "description": "the max test, one question at a time"},
      {"command": "pause", "description": "no challenges for an hour (or /pause 90)"},
+     {"command": "away", "description": "out on a day: /away tomorrow 14"},
      {"command": "help", "description": "what the bot can do"}]}'
    ```
 6. On your desktop, add to `~/.config/rep/config.toml`:

@@ -330,6 +330,14 @@ class CloudTests(unittest.TestCase):
         self.moment += datetime.timedelta(minutes=1)
         self.assertNotEqual(self.brain().tick()["text"], "nothing due")
 
+    def test_away_in_telegram_stores_the_day_and_lists_it(self):
+        self.sync()
+
+        self.assertIn("14:00", self.replies(self.send("/away tomorrow 14")))
+
+        self.assertEqual(self.brain().store.load_state()["away_days"], {"2026-11-19": 14})
+        self.assertIn("Out on", self.replies(self.send("/away")))
+
     def test_a_pause_longer_than_a_day_is_refused(self):
         self.sync()
         paused_before = self.brain().store.load_state()["paused_until"]
