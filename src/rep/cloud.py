@@ -5,15 +5,19 @@ import json
 import random
 import zoneinfo
 
-from rep.app import ANSWERS, MEETING_PAUSE_MINUTES, STAGE_RATE, App
+from rep.ai import model_configured
+from rep.app import ANSWER_SKIP, ANSWERS, MEETING_PAUSE_MINUTES, STAGE_RATE, STATUS_NOTED, App
+from rep.assistant import (NOTE_DONE, NOTE_SKIP, coach_reply, coach_request, note_answer, note_request, pain_answer,
+                           pain_request)
 from rep.catalog import parse_pack
 from rep.notifiers import Card, OutboxNotifier, card_to_dict
 from rep.charts import phone_stats_text
 from rep.maxtest import (QUESTION_RESULT, TEST_INSTRUCTIONS, result_question, skill_options, skill_question, skill_step,
                          test_questions)
-from rep.notifiers.telegram import (CALLBACK_SEPARATOR, PHONE_COMMANDS, TEST_CALLBACKS, TEST_START, acknowledge,
-                                    callback_arguments, clear_buttons, phone_buttons, routine_text, send_card,
-                                    send_long_text, send_text, session_picker, step_picker, today_text)
+from rep.notifiers.telegram import (CALLBACK_SEPARATOR, MESSAGE_LIMIT, ONE_PER_ROW, PHONE_COMMANDS, TEST_CALLBACKS,
+                                    TEST_START, acknowledge, callback_arguments, clear_buttons, phone_buttons, picker,
+                                    routine_text, send_card, send_long_text, send_text, session_picker, step_picker,
+                                    today_text)
 from rep.routine import describe_sessions
 from rep.progression import RATINGS
 from rep.store import EVENT_SET, EVENT_TEST, empty_state
@@ -40,6 +44,7 @@ COMMAND_SUMMARY = "summary"
 COMMAND_DISMISS = "dismiss"
 COMMAND_PAUSE = "pause"
 COMMAND_AWAY = "away"
+COMMAND_REST = "rest"
 COMMAND_APPLY_TEST = "apply-test"
 TELEGRAM_NOW = "/now"
 TELEGRAM_SESSION = "/session"
@@ -50,6 +55,11 @@ TELEGRAM_SUMMARY = "/summary"
 TELEGRAM_TEST = "/test"
 TELEGRAM_PAUSE = "/pause"
 TELEGRAM_AWAY = "/away"
+TELEGRAM_COACH = "/coach"
+TELEGRAM_PAIN = "/pain"
+PURPOSE_COACH = "coach"
+PURPOSE_NOTE = "note"
+PURPOSE_PAIN = "pain"
 TELEGRAM_SKIP = "/skip"
 TELEGRAM_CANCEL = "/cancel"
 TELEGRAM_HELP_COMMANDS = ("/help", "/start")
@@ -69,9 +79,11 @@ STATUS_TYPED = "typed"
 STATUS_DUPLICATE = "duplicate update"
 STATUS_ANSWERED = "answered"
 STATUS_TESTING = "max test in progress"
+STATUS_ASKING = "asking the model"
 ANSWER_ARGUMENT_COUNT = 3
 AWAY_ARGUMENT_COUNT = 3
 BARE_COMMAND_ARGUMENT_COUNT = 1
+REST_ARGUMENT_COUNT = 3
 SINGLE_VALUE_ARGUMENT_COUNT = 2
 NO_LINE_COMMAND = ""
 REQUIRED_EVENT_FIELDS = {"id", "type", "day"}
@@ -90,11 +102,21 @@ TELEGRAM_HELP = "\n".join((
     "/routine: your training days and their muscles",
     "/summary: today's summary",
     "/test: the max test, one question at a time (/skip, /cancel)",
+    "/coach: a review of your week and what to change",
+    "/pain: say what hurts (/pain left shoulder) and get advice and rest options",
+    "While a card waits, you can also write what you did: did 12, 2 left; or: skip, my wrist hurts.",
     f"/pause: no challenges for {MEETING_PAUSE_MINUTES} minutes (or /pause 90; /pause 0 resumes)",
     "/away: your away days; /away tomorrow 14 stops challenges at 14:00 that day (/away friday home undoes it)",
     "",
     "Export and import stay on your desktop: rep export, rep import.",
 ))
+AI_NOT_SET_UP = ("No AI model is set up: fill [ai] url and model in your desktop config, run rep tick, "
+                 "and set AI_KEY on the rep Worker.")
+NOTE_NOT_UNDERSTOOD = "I didn't get that. Tap the card, or write something like: did 12, 2 left."
+NOTE_SKIPPED = "Skipped."
+PAIN_NO_ANSWER = "No advice came back. Try again in a minute, or rest that area with /pause."
+PAIN_NEEDS_TEXT = "Say what hurts, like: /pain left shoulder when I push."
+NO_REST_LABEL = "Keep going"
 TEST_INTRO = f"{TEST_INSTRUCTIONS} Send each result as a number, /skip to leave one out, /cancel to stop."
 TEST_CANCELLED = "Max test stopped. Nothing was saved."
 TEST_NOT_RUNNING = "No max test is running: /test starts one."
@@ -201,7 +223,7 @@ def pack_from_text(text):
 
 
 def empty_outcome(text):
-    return {"text": text, "telegram": [], "cards": []}
+    return {"text": text, "telegram": [], "cards": [], "model": None}
 
 
 def parsed_rate_arguments(arguments):
@@ -218,8 +240,8 @@ def parsed_rate_arguments(arguments):
 
 
 class Brain:
-    def __init__(self, store, chat_id=None, clock=None, chooser=None):
-        self.store, self.chat_id = store, str(chat_id or "")
+    def __init__(self, store, chat_id=None, clock=None, chooser=None, can_ask_model=False):
+        self.store, self.chat_id, self.can_ask_model = store, str(chat_id or ""), can_ask_model
         self.clock = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
         self.chooser = chooser or random.Random()
         self.zone = None
@@ -253,16 +275,24 @@ class Brain:
         for card in app.notifier.cards:
             sequence = self.store.add_card(card, self.now_seconds())
             outcome["cards"].append({"sequence": sequence, "time": self.now_seconds(), "card": card_to_dict(card)})
-            open_message = self.store.setting(SETTING_OPEN_MESSAGE)
 
-            if phone_buttons(card) and open_message:
-                outcome["telegram"].append(clear_buttons(self.chat_id, open_message))
-                self.store.put_setting(SETTING_OPEN_MESSAGE, None)
+            if phone_buttons(card):
+                outcome["telegram"] += self.clear_open_message()
 
             if self.chat_id:
                 outcome["telegram"].append(send_card(self.chat_id, card))
 
         return outcome
+
+    def clear_open_message(self):
+        open_message = self.store.setting(SETTING_OPEN_MESSAGE)
+
+        if not open_message:
+            return []
+
+        self.store.put_setting(SETTING_OPEN_MESSAGE, None)
+
+        return [clear_buttons(self.chat_id, open_message)]
 
     def remember_message(self, message_id):
         self.store.put_setting(SETTING_OPEN_MESSAGE, message_id)
@@ -303,6 +333,8 @@ class Brain:
             text = app.away(arguments[1], arguments[2])
         elif name == COMMAND_AWAY and len(arguments) == BARE_COMMAND_ARGUMENT_COUNT:
             text = app.away_plan()
+        elif name == COMMAND_REST and len(arguments) == REST_ARGUMENT_COUNT and arguments[2].isdigit():
+            text = app.rest(arguments[1], int(arguments[2]))
         elif name == COMMAND_DISMISS:
             text = STATUS_DISMISSED
         elif name == COMMAND_APPLY_TEST and len(arguments) == SINGLE_VALUE_ARGUMENT_COUNT:
@@ -456,11 +488,23 @@ class Brain:
         if command == TELEGRAM_TEST:
             return self.start_test()
 
+        if text and not command.startswith(TELEGRAM_COMMAND_PREFIX) and self.model_ready() and self.pending():
+            return self.ask_about_note(text)
+
         if command in TELEGRAM_HELP_COMMANDS or not command.startswith(TELEGRAM_COMMAND_PREFIX):
             return self.reply(STATUS_HELP, TELEGRAM_HELP)
 
         if not self.configured():
             return self.reply(NOT_CONFIGURED, NOT_CONFIGURED)
+
+        if command in (TELEGRAM_COACH, TELEGRAM_PAIN) and not self.model_ready():
+            return self.reply(STATUS_HELP, AI_NOT_SET_UP)
+
+        if command == TELEGRAM_COACH:
+            return self.model_call(PURPOSE_COACH, coach_request(self.build_app()), {})
+
+        if command == TELEGRAM_PAIN:
+            return self.ask_about_pain(argument.strip())
 
         if command == TELEGRAM_NOW:
             return self.command([COMMAND_NOW])
@@ -480,6 +524,78 @@ class Brain:
             return self.reply(outcome["text"], outcome["text"])
 
         return self.telegram_report(command)
+
+    def model_ready(self):
+        settings = (self.store.setting(SETTING_CONFIG) or {}).get("ai")
+
+        return self.can_ask_model and self.configured() and bool(settings) and model_configured(settings)
+
+    def pending(self):
+        return self.store.load_state()["pending"]
+
+    def model_call(self, purpose, request, context):
+        return {**empty_outcome(STATUS_ASKING), "model": {"purpose": purpose, "request": request, "context": context}}
+
+    def ask_about_note(self, note):
+        app = self.build_app()
+        pending = app.state["pending"]
+
+        return self.model_call(PURPOSE_NOTE, note_request(app, note), {"token": pending["token"],
+                                                                       "kind": pending["kind"]})
+
+    def ask_about_pain(self, note):
+        if not note:
+            return self.reply(STATUS_HELP, PAIN_NEEDS_TEXT)
+
+        return self.model_call(PURPOSE_PAIN, pain_request(self.build_app(), note), {})
+
+    def model_answered(self, call, response):
+        purpose, context = call["purpose"], call["context"]
+
+        if purpose == PURPOSE_COACH:
+            return self.reply(STATUS_ANSWERED, coach_reply(response))
+
+        if purpose == PURPOSE_NOTE:
+            return self.apply_note(note_answer(response, context["kind"]), context["token"])
+
+        if purpose == PURPOSE_PAIN:
+            return self.offer_rest(pain_answer(response, pack_from_text(self.store.setting_text(SETTING_PACK))))
+
+        return empty_outcome(IGNORED_ARGUMENTS)
+
+    def apply_note(self, note, token):
+        if note is None or note["answer"] not in (NOTE_DONE, NOTE_SKIP):
+            return self.reply(STATUS_HELP, NOTE_NOT_UNDERSTOOD)
+
+        app = self.build_app()
+
+        if note["answer"] == NOTE_SKIP:
+            text = app.answer(token, ANSWER_SKIP)
+        elif note["rating"] is None:
+            text = app.note_reps(token, note["reps"])
+        else:
+            text = app.log_set(token, note["rating"], note["reps"])
+
+        cleared = self.clear_open_message() if app.state["pending"] is None else []
+        outcome = self.finish(app, text)
+        replies = {ANSWER_SKIP: NOTE_SKIPPED, STATUS_NOTED: TYPED_REPS_REPLY.format(done=note["reps"])}
+        reply = send_long_text(self.chat_id, replies.get(text, text))
+
+        return {**outcome, "telegram": cleared + (outcome["telegram"] or reply)}
+
+    def offer_rest(self, advice):
+        if advice is None:
+            return self.reply(STATUS_HELP, PAIN_NO_ANSWER)
+
+        if not advice["rest"]:
+            return self.reply(STATUS_ANSWERED, advice["advice"])
+
+        choices = [(f"Rest {group} {advice['days']} d", CALLBACK_SEPARATOR.join((COMMAND_REST, group,
+                                                                                   str(advice["days"]))))
+                   for group in advice["rest"]] + [(NO_REST_LABEL, COMMAND_DISMISS)]
+
+        return {**empty_outcome(STATUS_ANSWERED), "telegram": [picker(self.chat_id, advice["advice"][:MESSAGE_LIMIT], choices,
+                                                                      ONE_PER_ROW)]}
 
     def telegram_session(self, session):
         if session:
