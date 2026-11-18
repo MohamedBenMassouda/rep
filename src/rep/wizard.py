@@ -6,6 +6,7 @@ MINIMUM_BODY_WEIGHT_KG = 30
 MAXIMUM_BODY_WEIGHT_KG = 250
 HOURS_IN_DAY = 24
 CLEAR_ROUTINE = "none"
+ACCEPT = "y"
 
 
 def ask(question, default, accept, read=input, write=print):
@@ -36,6 +37,27 @@ def chosen_skills(text, skill_identifiers):
         return None
 
     return [skill_identifiers[int(number) - 1] for number in numbers]
+
+
+def ask_drafted_routine(draft_routine, read=input, write=print):
+    description = read("\nDescribe your training week in a sentence and AI drafts the days "
+                       "(Enter to type them yourself): ").strip()
+
+    if not description:
+        return None
+
+    write("  Asking the AI model...")
+    routine = draft_routine(description)
+
+    if not routine:
+        write("  No usable draft came back, type the days yourself.")
+
+        return None
+
+    for session, muscles in routine.items():
+        write(f"  {session}: {', '.join(muscles)}")
+
+    return routine if (read(f"  Use these days? [{ACCEPT}]: ").strip().lower() or ACCEPT) == ACCEPT else None
 
 
 def ask_routine(pack, routine, read=input, write=print):
@@ -71,7 +93,7 @@ def ask_routine(pack, routine, read=input, write=print):
         days[session] = muscles
 
 
-def run_wizard(pack, existing=None, read=input, write=print):
+def run_wizard(pack, existing=None, read=input, write=print, draft_routine=None):
     current = merge(DEFAULTS, existing or {})
     profile, schedule, nudges, display = current["profile"], current["schedule"], current["nudges"], current["display"]
     write("rep setup. Your answers stay in your config file on this computer.\n")
@@ -85,7 +107,8 @@ def run_wizard(pack, existing=None, read=input, write=print):
     default_skills = ",".join(str(skill_identifiers.index(skill) + 1) for skill in profile["skills"] if skill in skill_identifiers) or "none"
     skills_answer = ask("Skills to practise (numbers, comma separated, or none)", default_skills,
                         lambda text: chosen_skills(text, skill_identifiers) is not None, read, write)
-    routine = ask_routine(pack, current["training"]["routine"], read, write)
+    drafted = ask_drafted_routine(draft_routine, read, write) if draft_routine else None
+    routine = drafted or ask_routine(pack, current["training"]["routine"], read, write)
     start_hour = ask("Challenges from (hour)", schedule["start_hour"], is_hour, read, write)
     end_hour = ask("Challenges until (hour)", schedule["end_hour"],
                    lambda text: is_hour(text) and int(text) > int(start_hour), read, write)

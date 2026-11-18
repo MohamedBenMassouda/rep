@@ -3,14 +3,15 @@ import unittest
 import zoneinfo
 
 from rep.app import ANSWER_DONE, MEETING_PAUSE_MINUTES
-from rep.cloud import (DESKTOP_COMMAND, DESKTOP_SYNC, MAXIMUM_TEST_RESULT, NOT_CONFIGURED,
-                       STATUS_TESTING, TEST_NOT_RUNNING, TEST_SESSION_SECONDS, Brain, SqlStore)
+from rep.cloud import (AI_NOT_SET_UP, DESKTOP_COMMAND, DESKTOP_SYNC, MAXIMUM_TEST_RESULT, NOT_CONFIGURED,
+                       NOTE_NOT_UNDERSTOOD, PURPOSE_COACH, PURPOSE_NOTE, STATUS_TESTING, TEST_NOT_RUNNING, TEST_SESSION_SECONDS, Brain, SqlStore)
 from rep.notifiers.telegram import METHOD_CLEAR_BUTTONS, METHOD_SEND
 from rep.progression import RATING_STEADY
 from rep.notifiers.telegram import MESSAGE_LIMIT, TEST_START, split_message
 from rep.store import EVENT_SESSION, EVENT_SET, EVENT_TEST, new_event
 from rep.sync import pack_digest
-from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
+from rep.config import DEFAULTS
+from tests.helpers import config_with, default_pack_raw, model_json, model_response, seeded_random, sqlite_execute
 
 OWNER_CHAT = "1001"
 STRANGER_CHAT = "2002"
@@ -28,6 +29,9 @@ LONG_STREAK_DAYS = 12
 NO_WRITES = 0
 MEETING_LENGTH = datetime.timedelta(minutes=MEETING_PAUSE_MINUTES)
 TOO_LONG_PAUSE_MINUTES = 100000
+MODEL_SETTINGS = {"url": "https://models.example/v1", "model": "some-model", "key_file": ""}
+REPS_WRITTEN = 11
+REST_DAYS = 3
 
 
 def telegram_calls(outcome, method):
@@ -46,14 +50,24 @@ class CloudTests(unittest.TestCase):
     def setUp(self):
         self.execute = sqlite_execute(self)
         self.moment = MORNING_UTC
+        self.can_ask_model = False
+        self.ai_settings = DEFAULTS["ai"]
 
     def brain(self):
-        return Brain(SqlStore(self.execute), OWNER_CHAT, clock=lambda: self.moment, chooser=seeded_random())
+        return Brain(SqlStore(self.execute), OWNER_CHAT, clock=lambda: self.moment, chooser=seeded_random(),
+                     can_ask_model=self.can_ask_model)
+
+    def with_model(self):
+        self.can_ask_model, self.ai_settings = True, MODEL_SETTINGS
+        self.sync()
+
+    def answer_model(self, outcome, response):
+        return self.brain().model_answered(outcome["model"], response)
 
     def sync_report(self, cursor=None):
         pack = default_pack_raw()
 
-        return {"config": config_with(conditions=NO_CHECKS), "pack": pack, "pack_digest": pack_digest(pack),
+        return {"config": config_with(conditions=NO_CHECKS, ai=self.ai_settings), "pack": pack, "pack_digest": pack_digest(pack),
                 "timezone": TIMEZONE, "cursor": cursor}
 
     def sync(self, cursor=None):
@@ -337,6 +351,71 @@ class CloudTests(unittest.TestCase):
 
         self.assertEqual(self.brain().store.load_state()["away_days"], {"2026-11-19": 14})
         self.assertIn("Out on", self.replies(self.send("/away")))
+
+    def test_the_coach_says_how_to_set_it_up_when_there_is_no_model(self):
+        self.sync()
+
+        outcome = self.send("/coach")
+
+        self.assertIsNone(outcome["model"])
+        self.assertEqual(self.replies(outcome), AI_NOT_SET_UP)
+
+    def test_the_coach_asks_the_model_and_sends_its_review(self):
+        self.with_model()
+
+        outcome = self.send("/coach")
+        answered = self.answer_model(outcome, model_response("• Pull-ups stall: add a rep."))
+
+        self.assertEqual(outcome["model"]["purpose"], PURPOSE_COACH)
+        self.assertEqual(self.replies(answered), "• Pull-ups stall: add a rep.")
+
+    def test_a_written_note_logs_the_set_once_and_clears_the_card_buttons(self):
+        self.with_model()
+        self.command("now")
+        self.brain().remember_message(TAPPED_MESSAGE)
+
+        outcome = self.send("did 11, could do 3 more")
+        note = model_json({"answer": "done", "reps": REPS_WRITTEN, "feeling": "3+ left"})
+        answered = self.answer_model(outcome, note)
+        repeated = self.answer_model(outcome, note)
+
+        sets = [event for event in self.brain().export()["events"] if event["type"] == EVENT_SET]
+        self.assertEqual(outcome["model"]["purpose"], PURPOSE_NOTE)
+        self.assertEqual([event["amount"] for event in sets], [REPS_WRITTEN])
+        self.assertEqual(telegram_calls(answered, METHOD_CLEAR_BUTTONS)[0]["payload"]["message_id"], TAPPED_MESSAGE)
+        self.assertIn("ignored", self.replies(repeated))
+
+    def test_a_note_the_model_did_not_understand_changes_nothing(self):
+        self.with_model()
+        self.command("now")
+
+        answered = self.answer_model(self.send("hmm"), None)
+
+        self.assertEqual(self.replies(answered), NOTE_NOT_UNDERSTOOD)
+        self.assertIsNotNone(self.pending())
+
+    def test_text_with_a_waiting_card_but_no_model_gets_the_help(self):
+        self.sync()
+        self.command("now")
+
+        self.assertIsNone(self.send("did 11")["model"])
+
+    def test_text_without_a_waiting_card_gets_the_help(self):
+        self.with_model()
+
+        self.assertIsNone(self.send("hello")["model"])
+
+    def test_pain_advice_offers_rest_buttons_that_rest_the_group(self):
+        self.with_model()
+
+        outcome = self.send("/pain my wrist hurts on push-ups")
+        answered = self.answer_model(outcome, model_json({"advice": "Rest the wrist.", "rest": ["push"],
+                                                          "days": REST_DAYS}))
+        keyboard = telegram_calls(answered, METHOD_SEND)[0]["payload"]["reply_markup"]["inline_keyboard"]
+        self.tap(keyboard[0][0]["callback_data"])
+
+        self.assertEqual(keyboard[0][0]["callback_data"], f"rest push {REST_DAYS}")
+        self.assertEqual(self.brain().store.load_state()["rested"], {"push": "2026-11-21"})
 
     def test_a_pause_longer_than_a_day_is_refused(self):
         self.sync()

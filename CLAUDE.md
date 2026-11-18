@@ -158,12 +158,13 @@ its state transition runs again from the top:
   `best`, `pending` and every event. Renaming one in a pack orphans its history; migrate the
   state and events in the same change.
 - **The button argv is an interface.** Notifiers run `rep answer <token> done|skip|later`,
-  `rep rate <token> 3|1|0 [reps done]`, `rep pause <minutes>`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
+  `rep rate <token> 3|1|0 [reps done]`, `rep pause <minutes>`, `rep rest <group> <days>`, `rep test-window` and `rep dismiss`. The desktop notifier re-enters
   through the hidden `rep await-notification <json>`. Telegram carries the same arguments joined by
   spaces as `callback_data` (64 bytes at most); the phone only offers `PHONE_COMMANDS`.
 - **Reps typed in Telegram** wait in `pending["typed"]` until the rating; `App.rate()` uses them when
   the button carries no reps.
-- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/pause`, `/away`, `/help`)
+- **Telegram commands** (`/now`, `/session`, `/today`, `/stats`, `/routine`, `/summary`, `/test`, `/pause`, `/away`,
+  `/coach`, `/pain`, `/help`)
   answer in plain text, never `parse_mode`, and are split at `MESSAGE_LIMIT`. Stats for the phone
   come from `charts.phone_stats_text()`, which shares its rows with the terminal's `stats_text()`.
 - **The max test in Telegram** keeps its progress in the `max_test` setting (absolute position and
@@ -222,6 +223,25 @@ its state transition runs again from the top:
   public URL (`workers_dev: false`) and is reached only through the Durable Object binding. Only
   the configured chat is obeyed; the desktop's `[sync]` section never leaves the desktop.
 
+### AI
+
+- **The model only suggests.** `scheduler`, `progression` and `App` never call it, and `tick` never
+  does (it runs every 3 minutes). Every answer is checked before it reaches state: notes go through
+  the token check (`App.log_set()`, `App.note_reps()`, `App.answer()`), rest through `App.rest()`,
+  pack additions through `parse_pack()` with new identifiers only, drafted routines through
+  `parse_day()`. Unusable answers change nothing.
+- `ai.py` is the whole provider seam: OpenAI-compatible chat completions with a JSON schema
+  (`model_request()`, `model_text()`, `model_object()`), plus the desktop's `urllib` transport.
+  Adding a provider means a config change; a native adapter only if one can't speak that protocol.
+  Prompts and answer checks live in `assistant.py`, pure and tested with canned responses
+  (`tests/helpers.model_json()`).
+- **The cloud asks in two steps.** `Brain` is synchronous and a Python Worker can't block on
+  `fetch`, so a Telegram handler returns `outcome["model"]` (`purpose`, `request`, `context`);
+  `entry.py` awaits the call and hands the response to `Brain.model_answered()`. Context carries
+  what must not change in between (the card's token). The Worker holds the key as `AI_KEY`;
+  without it `Brain(can_ask_model=False)` answers as before.
+- The desktop reads the key from `[ai] key_file`; the key never goes into the synced config.
+
 ### Results, retries, errors
 
 No retries. Subprocess calls (`qs`, `notify-send`, `pactl`, `pw-dump`, `systemctl`, the line
@@ -232,7 +252,8 @@ User mistakes (no config, a broken pack) exit with `EXIT_PROBLEM` and one readab
 ## Testing
 
 `unittest` from the standard library, in `tests/` (`test_progression.py`, `test_scheduler.py`,
-`test_app.py`, `test_maxtest.py`, `test_backup.py`, `test_cloud.py`, `test_sync.py`). Shared fixtures
+`test_app.py`, `test_maxtest.py`, `test_backup.py`, `test_cloud.py`, `test_sync.py`, `test_away.py`,
+`test_ai.py`, `test_assistant.py`). Shared fixtures
 are in `tests/helpers.py`, including `sqlite_execute()` for the cloud store.
 
 - **No network, no secret store, no real vendor API from the test suite.** Fake HTTP at the

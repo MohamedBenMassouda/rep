@@ -47,3 +47,11 @@ def sqlite_execute(test_case):
 
 def default_pack_raw():
     return json.loads(resources.files("rep.data").joinpath(DEFAULT_PACK_RESOURCE).read_text())
+
+
+def model_response(content):
+    return {"choices": [{"message": {"role": "assistant", "content": content}}]}
+
+
+def model_json(answer):
+    return model_response(json.dumps(answer))

@@ -23,11 +23,14 @@ ANSWER_DONE = "done"
 ANSWER_SKIP = "skip"
 ANSWER_LATER = "later"
 ANSWERS = (ANSWER_DONE, ANSWER_SKIP, ANSWER_LATER)
+STATUS_NOTED = "noted"
 GLYPH_CHECK = 0xF012C
 GLYPH_CLOSE = 0xF0156
 GLYPH_CLOCK = 0xF0150
 GLYPH_PAUSE = 0xF03E4
 MEETING_PAUSE_MINUTES = 60
+MAXIMUM_REST_DAYS = 28
+REST_DAYS_RANGE = range(MAXIMUM_REST_DAYS + 1)
 MAXIMUM_PAUSE_MINUTES = 24 * 60
 PAUSE_MINUTES_RANGE = range(MAXIMUM_PAUSE_MINUTES + 1)
 PAUSE_TIME_FORMAT = "%H:%M"
@@ -236,6 +239,51 @@ class App:
 
     def away_plan(self):
         return "\n".join(away_plan_lines(self.config["schedule"], self.state["away_days"], self.clock().date()))
+
+    def rest(self, group, days):
+        today = self.clock().date()
+
+        if group not in self.pack.groups + (SKILL_GROUP,) or days not in REST_DAYS_RANGE:
+            return f"ignored: rest one of {', '.join(self.pack.groups + (SKILL_GROUP,))} for 0 to {MAXIMUM_REST_DAYS} days"
+
+        until = today + datetime.timedelta(days=days)
+        rested = {name: day for name, day in self.state["rested"].items() if day > today.isoformat() and name != group}
+        self.state["rested"] = {**rested, group: until.isoformat()} if days else rested
+        self.save()
+
+        return f"{group} rests until {day_text(until)}." if days else f"{group} is back in the challenges."
+
+    def pending_with(self, token):
+        pending = self.state.get("pending")
+
+        return pending if pending and pending["token"] == token else None
+
+    def log_set(self, token, rating, done=None):
+        pending = self.pending_with(token)
+
+        if pending is None:
+            return "ignored: that challenge was already rated"
+
+        pending["stage"] = STAGE_RATE
+
+        return self.rate(token, rating, done)
+
+    def note_reps(self, token, done):
+        pending = self.pending_with(token)
+
+        if pending is None:
+            return "ignored: that challenge was already rated"
+
+        if done is not None:
+            pending["typed"] = done
+
+        if pending["stage"] == STAGE_ASK:
+            pending["stage"] = STAGE_RATE
+            self.show_pending()
+        else:
+            self.save()
+
+        return STATUS_NOTED
 
     def rate(self, token, rating, done=None):
         pending = self.matching_pending(token, STAGE_RATE)

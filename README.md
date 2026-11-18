@@ -23,6 +23,10 @@ pull-up. You answer from the notification, and your targets move with you.
   `rep pause [minutes]`: nothing is sent until it's over, then the card comes back.
 - **Days you're out:** name the weekdays you leave home (`tuesday = 14`) or one day at a time
   (`rep away friday 15`, `/away tomorrow 14`), and challenges stop at that hour.
+- **AI coach (optional):** any OpenAI-compatible model (Gemini, OpenRouter, Ollama…) reviews your
+  week, reads what you write in Telegram ("did 12, 2 left"), suggests rest when something hurts,
+  drafts your routine in `rep init` and new ladders for your pack. It only suggests: every answer is
+  checked before it touches your data.
 - **Works on any Linux desktop:** standard notifications with buttons, a
   [Quickshell](https://quickshell.org) flyout when available, or the terminal.
 - **On your phone too (optional):** free Cloudflare Workers run the schedule and send every
@@ -47,6 +51,9 @@ and a notification daemon that supports actions (dunst, mako, swaync, GNOME, KDE
 | `rep now` | a challenge right now |
 | `rep pause [MINUTES]` | nothing for 60 minutes (or MINUTES, up to a day); `rep pause 0` resumes |
 | `rep away [DAY HOUR]` | out on DAY (`today`, `tomorrow`, a weekday or `YYYY-MM-DD`): challenges stop at HOUR; `rep away friday home` undoes it; no arguments lists your away days |
+| `rep rest GROUP DAYS` | leave a group (`push`, `pull`, `legs`, `core`, `skill`) out of the challenges for DAYS days; `0` brings it back |
+| `rep coach` | an AI review of your week and what to change (needs `[ai]`) |
+| `rep pack suggest "WISH" [--output FILE]` | the AI drafts new exercises and ladders (`"a ring dip ladder for push"`); checked, then written to FILE only if you ask |
 | `rep session DAY` | log one of your training days today (`upper`, `legs`, `full` without a routine) |
 | `rep routine [--names]` | your training days, their muscles and what they count as |
 | `rep stats [--history]` | targets, ladders, weekly caps; `--history` adds progress charts and compares max tests |
@@ -107,6 +114,7 @@ per muscle against those groups' weekly caps and skips them for that day's chall
 | `[display]` | `notifier` (auto / quickshell / desktop / terminal), `quickshell_kind`, `line_command` |
 | `[conditions]` | `pause_files`, `check_microphone`, `check_screen_share` |
 | `[sync]` | `url` and `token` of your cloud Worker; empty keeps everything on this computer |
+| `[ai]` | `url` and `model` of an OpenAI-compatible API, `key_file` holding its key; empty `url` turns the AI off |
 
 `line_command` lets another program supply the lines on the cards, e.g. a themed set of quips:
 `line_command = "my-quips {kind}"` is called with `challenge`, `done`, `level_up`, `boss`,
@@ -141,7 +149,8 @@ number before tapping how it felt. The bot also takes `/now` (a challenge right 
 (log a training day from buttons, or `/session chest-day`), `/today`, `/stats`, `/routine`,
 `/summary`, `/test` (the max test, one question at a time; `/skip` and `/cancel` work during it),
 `/pause` (nothing for 60 minutes, `/pause 90` for longer, `/pause 0` to resume), `/away` (your away
-days; `/away tomorrow 14` stops challenges at 14:00 that day, `/away friday home` undoes it) and `/help`. Export and import stay on the desktop.
+days; `/away tomorrow 14` stops challenges at 14:00 that day, `/away friday home` undoes it), `/coach`
+and `/pain` (with the AI set up, below) and `/help`. Export and import stay on the desktop.
 
 You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflare account.
 
@@ -186,6 +195,8 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
      {"command": "test", "description": "the max test, one question at a time"},
      {"command": "pause", "description": "no challenges for an hour (or /pause 90)"},
      {"command": "away", "description": "out on a day: /away tomorrow 14"},
+     {"command": "coach", "description": "an AI review of your week"},
+     {"command": "pain", "description": "say what hurts: advice and rest options"},
      {"command": "help", "description": "what the bot can do"}]}'
    ```
 6. On your desktop, add to `~/.config/rep/config.toml`:
@@ -201,6 +212,35 @@ You need [uv](https://docs.astral.sh/uv/), Node.js, `rsync` and a free Cloudflar
 The Worker ticks every 3 minutes and reads only the last week of sets plus your max tests, so it
 stays inside the free plan's CPU budget as your history grows. Cloudflare's dashboard shows the CPU
 time of each run under Workers → rep → Metrics.
+
+## AI (optional)
+
+Any API that speaks OpenAI's chat completions works: switching models or providers changes the
+config, not the code. With Gemini's free tier:
+
+```toml
+[ai]
+url = "https://generativelanguage.googleapis.com/v1beta/openai"
+model = "gemini-3.5-flash-lite"
+key_file = "~/.config/rep/ai-key"
+```
+
+Put the key in `key_file` (`chmod 600`). Other providers: OpenRouter
+(`https://openrouter.ai/api/v1`), Ollama on your machine (`http://localhost:11434/v1`, any key),
+Groq, OpenAI. The model has to support JSON schema answers (`response_format`).
+
+- `rep coach` and `/coach`: a short review of the last 7 days, stalls, balance and what to change.
+- In Telegram, while a card waits, write what happened instead of tapping: `did 12, 2 left`,
+  `9, failed the last one`, `skip, my wrist hurts`. It answers, rates or skips that card; anything
+  unclear changes nothing.
+- `/pain left shoulder when I push`: careful advice and buttons that rest the affected groups for a
+  few days (`rep rest` does the same by hand).
+- `rep init` offers to draft your training days from a sentence; you confirm them.
+- `rep pack suggest`: new exercises and ladders, only new identifiers, validated like any pack.
+
+What goes to the provider: your targets, the last week of sets and skips, your max tests and what
+you write. The cloud needs the key too: `uv run pywrangler secret put AI_KEY` in `worker/`. No
+retries: if the model is busy or slow you get a short "try again" and nothing changes.
 
 ## Development
 

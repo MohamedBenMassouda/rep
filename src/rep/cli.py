@@ -10,7 +10,9 @@ import sys
 import time
 from pathlib import Path
 
+from rep.ai import ModelMissing, ask_model, model_configured, model_key, model_object
 from rep.app import ANSWERS, MEETING_PAUSE_MINUTES, App
+from rep.assistant import coach_reply, coach_request, drafted_routine, pack_request, pack_with_additions, routine_request
 from rep.backup import FORMAT_JSON, FORMATS, export_records, export_text, import_backup
 from rep.catalog import DEFAULT_PACK_RESOURCE, PackError, load_pack
 from rep.charts import stats_text
@@ -33,7 +35,7 @@ TERMINALS = ("kitty", "foot", "alacritty", "wezterm", "gnome-terminal", "konsole
 EXIT_PROBLEM = 1
 
 
-SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "pause", "away", "session", "summary", "dismiss", "test", "today",
+SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "pause", "away", "rest", "coach", "session", "summary", "dismiss", "test", "today",
                    "stats", "routine", "export", "import", "sync-upload")
 
 
@@ -78,6 +80,9 @@ def forwarded_arguments(arguments):
     if command == "away" and arguments.day:
         return [command, arguments.day, arguments.hour]
 
+    if command == "rest":
+        return [command, arguments.group, str(arguments.days)]
+
     return [command]
 
 
@@ -119,7 +124,7 @@ def dispatch_synced(paths, config, arguments):
         print(cached)
     elif command == "routine":
         command_routine(local_app(config), arguments)
-    elif command in ("stats", "export"):
+    elif command in ("stats", "export", "coach"):
         dispatch_read(cloud_app(client, config), arguments)
     elif command == "import":
         backup = json.loads(Path(arguments.file).read_text())
@@ -141,6 +146,8 @@ def dispatch_synced(paths, config, arguments):
 def dispatch_read(app, arguments):
     if arguments.command == "stats":
         print(stats_text(app, with_history=arguments.history))
+    elif arguments.command == "coach":
+        print(coach_reply(ask_model(app.config["ai"], coach_request(app))))
     else:
         write_export(export_records(app.state, list(app.events), arguments.format), arguments)
 
@@ -158,10 +165,34 @@ def command_init(paths, arguments):
         with open(paths.config_file, "rb") as config_stream:
             existing = tomllib.load(config_stream)
 
-    config = run_wizard(pack_for(merge(DEFAULTS, existing)) if existing else load_pack(), existing)
+    merged = merge(DEFAULTS, existing or {})
+    pack = pack_for(merged) if existing else load_pack()
+    config = run_wizard(pack, existing, draft_routine=routine_drafter(merged["ai"], pack))
     save_config(paths, config)
     print(f"\nSaved to {paths.config_file}.")
     print("Next: `rep test` (sets your targets), then `rep install-timer`.")
+
+
+def routine_drafter(settings, pack):
+    if not model_configured(settings) or not model_key(settings):
+        return None
+
+    return lambda description: drafted_routine(ask_model(settings, routine_request(settings, pack, description)), pack)
+
+
+def command_pack_suggestion(paths, arguments):
+    config = load_config(paths)
+    pack_raw = pack_raw_for(config)
+    print("Asking the AI model, this can take a few seconds...", file=sys.stderr)
+    extended, added = pack_with_additions(pack_raw, model_object(ask_model(config["ai"], pack_request(
+        config["ai"], pack_raw, arguments.wish))))
+    print("Suggested:\n" + "\n".join(f"  {line}" for line in added))
+
+    if arguments.output:
+        Path(arguments.output).write_text(json.dumps(extended, indent=2, ensure_ascii=False))
+        print(f"Wrote the pack with these added to {arguments.output}. Check it, then point pack_file at it.")
+    else:
+        print("Nothing written: add --output FILE to save the pack with these added.")
 
 
 def command_now(paths, arguments):
@@ -201,7 +232,9 @@ def command_import(paths, arguments):
 def command_pack(paths, arguments):
     destination = paths.packs_directory / DEFAULT_PACK_RESOURCE
 
-    if arguments.action == "export":
+    if arguments.action == "suggest":
+        command_pack_suggestion(paths, arguments)
+    elif arguments.action == "export":
         paths.packs_directory.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(json.loads(load_pack_text()), indent=2, ensure_ascii=False))
         print(f"Copied the default pack to {destination}.")
@@ -244,6 +277,10 @@ def parser():
     away = commands.add_parser("away", help="out on a day: challenges stop at an hour (no arguments lists them)")
     away.add_argument("day", nargs="?", help="today, tomorrow, a weekday or YYYY-MM-DD")
     away.add_argument("hour", nargs="?", help="challenges stop at this hour (0-23), or home to undo")
+    rest = commands.add_parser("rest", help="leave a group out of the challenges for some days (0 brings it back)")
+    rest.add_argument("group", help="push, pull, legs, core or skill")
+    rest.add_argument("days", type=int)
+    commands.add_parser("coach", help="an AI review of your week and what to change")
     session = commands.add_parser("session", help="log a training session today")
     setattr(session.add_argument("kind"), COMPLETION_COMMAND, ("routine", "--names"))
     routine = commands.add_parser("routine", help="your training days and the muscles each one trains")
@@ -261,7 +298,9 @@ def parser():
     imported.add_argument("file")
     imported.add_argument("--with-state", action="store_true", help="also replace targets and ladders")
     pack = commands.add_parser("pack", help="show or copy the exercise pack")
-    pack.add_argument("action", choices=("path", "export"))
+    pack.add_argument("action", choices=("path", "export", "suggest"))
+    pack.add_argument("wish", nargs="?", help="with suggest: what to add, e.g. 'a dragon flag ladder for core'")
+    pack.add_argument("--output", help="with suggest: write the pack with the suggestion added here")
     commands.add_parser("install-timer", help="run `rep tick` every few minutes (systemd)")
     commands.add_parser("uninstall-timer", help="remove the timer")
     completion = commands.add_parser("completion", help="print a shell completion script")
@@ -304,6 +343,10 @@ def dispatch(paths, arguments):
         print(build_app(paths).log_session(arguments.kind))
     elif command == "pause":
         print(build_app(paths).pause(arguments.minutes))
+    elif command == "rest":
+        print(build_app(paths).rest(arguments.group, arguments.days))
+    elif command == "coach":
+        dispatch_read(build_app(paths), arguments)
     elif command == "away":
         app = build_app(paths)
         print(app.away(arguments.day, arguments.hour) if arguments.day else app.away_plan())
@@ -338,6 +381,9 @@ def main(argv=None):
     if arguments.command == "away" and bool(arguments.day) != bool(arguments.hour):
         command_parser.error("away takes a day and an hour, or nothing")
 
+    if arguments.command == "pack" and (arguments.action == "suggest") != bool(arguments.wish):
+        command_parser.error("pack suggest takes what to add, the other actions take nothing")
+
     try:
         dispatch(default_paths(), arguments)
     except ConfigMissing as missing:
@@ -350,6 +396,9 @@ def main(argv=None):
         sys.exit(EXIT_PROBLEM)
     except PackError as problem:
         print(f"Exercise pack problem: {problem}", file=sys.stderr)
+        sys.exit(EXIT_PROBLEM)
+    except ModelMissing as problem:
+        print(problem, file=sys.stderr)
         sys.exit(EXIT_PROBLEM)
     except SyncError as problem:
         print(f"Sync problem: {problem}", file=sys.stderr)

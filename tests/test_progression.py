@@ -126,6 +126,16 @@ class ChoiceTests(unittest.TestCase):
 
         self.assertIsNone(self.choose(events))
 
+    def test_a_resting_group_is_never_chosen_until_its_rest_ends(self):
+        state = fresh_state()
+        state["rested"] = {"push": "2026-11-20", "skill": "2026-11-20", "pull": FIXED_NOW.date().isoformat()}
+
+        choices = [self.choose([], state=state) for _ in range(CHOICES_TO_SAMPLE)]
+
+        self.assertNotIn("push", {choice.group for choice in choices})
+        self.assertNotIn(KIND_SKILL, {choice.kind for choice in choices})
+        self.assertIn("pull", {choice.group for choice in choices})
+
     def test_a_boss_appears_at_most_once_a_week(self):
         afternoon = FIXED_NOW.replace(hour=16)
         boss = event_at(EVENT_SET, now=afternoon, kind=KIND_BOSS, group="pull")

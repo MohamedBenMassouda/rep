@@ -7,7 +7,8 @@ from pathlib import Path
 from rep.cloud import Brain, SqlStore
 from rep.paths import Paths
 from rep.launcher import cached_today
-from rep.sync import (CARD_FRESH_SECONDS, USER_AGENT, SyncClient, desktop_command, desktop_tick, read_sync_state,
+from rep.web import USER_AGENT
+from rep.sync import (CARD_FRESH_SECONDS, SyncClient, desktop_command, desktop_tick, read_sync_state,
                       sync_request, write_sync_state)
 from tests.helpers import config_with, default_pack_raw, seeded_random, sqlite_execute
 
