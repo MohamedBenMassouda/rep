@@ -1,3 +1,4 @@
+from rep.away import weekly_away, weekly_away_text
 from rep.config import DEFAULTS, LEVEL_SCALES, NOTIFIERS, is_clock_time, merge
 from rep.routine import RoutineError, parse_day
 
@@ -88,12 +89,14 @@ def run_wizard(pack, existing=None, read=input, write=print):
     start_hour = ask("Challenges from (hour)", schedule["start_hour"], is_hour, read, write)
     end_hour = ask("Challenges until (hour)", schedule["end_hour"],
                    lambda text: is_hour(text) and int(text) > int(start_hour), read, write)
+    away = ask("Days you're out, with the hour challenges stop (example: tue 14, thu 14; or none)",
+               weekly_away_text(schedule["away"]), lambda text: weekly_away(text) is not None, read, write)
     protein = ask("Protein check-in time (HH:MM or off)", nudges["protein"], is_clock_time, read, write)
     bedtime = ask("Bedtime reminder (HH:MM or off)", nudges["bedtime"], is_clock_time, read, write)
     summary = ask("Daily summary (HH:MM or off)", nudges["summary"], is_clock_time, read, write)
     notifier = ask(f"Show challenges with ({' / '.join(NOTIFIERS)})", display["notifier"], lambda text: text in NOTIFIERS, read, write)
     profile.update(body_weight_kg=float(weight), level=level, skills=chosen_skills(skills_answer, skill_identifiers))
-    schedule.update(start_hour=int(start_hour), end_hour=int(end_hour))
+    schedule.update(start_hour=int(start_hour), end_hour=int(end_hour), away=weekly_away(away))
     current["training"]["routine"] = routine
     nudges.update(protein=protein, bedtime=bedtime, summary=summary)
     display.update(notifier=notifier)

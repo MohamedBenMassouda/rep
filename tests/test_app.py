@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from rep.app import ANSWER_DONE, ANSWER_LATER, ANSWER_SKIP, App
+from rep.away import HOME
 from rep.paths import Paths
 from rep.progression import RATING_EASY, Challenge, KIND_HARD, target_of
 from rep.store import EVENT_SESSION, EVENT_SET, EVENT_SKIP, FileStore, load_events
@@ -11,6 +12,8 @@ from tests.helpers import FIXED_NOW, config_with, default_pack, seeded_random
 NO_CHECKS = {"pause_files": [], "check_microphone": False, "check_screen_share": False}
 PUSH_CHALLENGE = Challenge(KIND_HARD, "push", "push_up", "clap_push_up")
 REPS_DONE = 30
+AWAY_HOUR = "14"
+OLD_AWAY_DAY = "2026-11-01"
 
 
 class RecordingNotifier:
@@ -113,6 +116,22 @@ class AppTests(unittest.TestCase):
         self.assertEqual(app.today()["trained"], ["push"])
 
         self.assertEqual([event["type"] for event in load_events(self.paths)], [EVENT_SESSION])
+
+    def test_an_away_day_is_kept_once_and_past_away_days_are_dropped(self):
+        self.app.state["away_days"] = {OLD_AWAY_DAY: 9}
+
+        self.app.away("friday", AWAY_HOUR)
+        reply = self.fresh_app().away("friday", AWAY_HOUR)
+
+        self.assertEqual(self.fresh_app().state["away_days"], {"2026-11-20": 14})
+        self.assertIn("14:00", reply)
+        self.fresh_app().away("friday", HOME)
+        self.assertEqual(self.fresh_app().state["away_days"], {"2026-11-20": None})
+
+    def test_an_away_day_needs_a_known_day_and_an_hour(self):
+        self.assertTrue(self.app.away("someday", AWAY_HOUR).startswith("ignored"))
+        self.assertTrue(self.app.away("friday", "25").startswith("ignored"))
+        self.assertEqual(self.fresh_app().state["away_days"], {})
 
     def test_the_state_survives_a_restart_between_the_two_answer_steps(self):
         self.app.start_challenge(PUSH_CHALLENGE)

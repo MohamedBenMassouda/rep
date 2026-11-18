@@ -39,6 +39,7 @@ COMMAND_NOW = "now"
 COMMAND_SUMMARY = "summary"
 COMMAND_DISMISS = "dismiss"
 COMMAND_PAUSE = "pause"
+COMMAND_AWAY = "away"
 COMMAND_APPLY_TEST = "apply-test"
 TELEGRAM_NOW = "/now"
 TELEGRAM_SESSION = "/session"
@@ -48,6 +49,7 @@ TELEGRAM_ROUTINE = "/routine"
 TELEGRAM_SUMMARY = "/summary"
 TELEGRAM_TEST = "/test"
 TELEGRAM_PAUSE = "/pause"
+TELEGRAM_AWAY = "/away"
 TELEGRAM_SKIP = "/skip"
 TELEGRAM_CANCEL = "/cancel"
 TELEGRAM_HELP_COMMANDS = ("/help", "/start")
@@ -68,6 +70,8 @@ STATUS_DUPLICATE = "duplicate update"
 STATUS_ANSWERED = "answered"
 STATUS_TESTING = "max test in progress"
 ANSWER_ARGUMENT_COUNT = 3
+AWAY_ARGUMENT_COUNT = 3
+BARE_COMMAND_ARGUMENT_COUNT = 1
 SINGLE_VALUE_ARGUMENT_COUNT = 2
 NO_LINE_COMMAND = ""
 REQUIRED_EVENT_FIELDS = {"id", "type", "day"}
@@ -87,6 +91,7 @@ TELEGRAM_HELP = "\n".join((
     "/summary: today's summary",
     "/test: the max test, one question at a time (/skip, /cancel)",
     f"/pause: no challenges for {MEETING_PAUSE_MINUTES} minutes (or /pause 90; /pause 0 resumes)",
+    "/away: your away days; /away tomorrow 14 stops challenges at 14:00 that day (/away friday home undoes it)",
     "",
     "Export and import stay on your desktop: rep export, rep import.",
 ))
@@ -294,6 +299,10 @@ class Brain:
             text = STATUS_SHOWN
         elif name == COMMAND_PAUSE and len(arguments) == SINGLE_VALUE_ARGUMENT_COUNT and arguments[1].isdigit():
             text = app.pause(int(arguments[1]))
+        elif name == COMMAND_AWAY and len(arguments) == AWAY_ARGUMENT_COUNT:
+            text = app.away(arguments[1], arguments[2])
+        elif name == COMMAND_AWAY and len(arguments) == BARE_COMMAND_ARGUMENT_COUNT:
+            text = app.away_plan()
         elif name == COMMAND_DISMISS:
             text = STATUS_DISMISSED
         elif name == COMMAND_APPLY_TEST and len(arguments) == SINGLE_VALUE_ARGUMENT_COUNT:
@@ -462,6 +471,11 @@ class Brain:
         if command == TELEGRAM_PAUSE:
             minutes = argument.strip() or str(MEETING_PAUSE_MINUTES)
             outcome = self.command([COMMAND_PAUSE, minutes])
+
+            return self.reply(outcome["text"], outcome["text"])
+
+        if command == TELEGRAM_AWAY:
+            outcome = self.command([COMMAND_AWAY] + argument.split())
 
             return self.reply(outcome["text"], outcome["text"])
 

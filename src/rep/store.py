@@ -24,6 +24,7 @@ def empty_state():
         "stamps": {},
         "last_test_day": None,
         "paused_until": 0,
+        "away_days": {},
     }
 
 

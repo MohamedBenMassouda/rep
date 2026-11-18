@@ -1,6 +1,7 @@
 import datetime
 import secrets
 
+from rep.away import HOME, away_day, away_hour, away_plan_lines, day_text, end_hour_on, hour_text, upcoming_away
 from rep.catalog import SKILL_GROUP, format_amount, skill_progress
 from rep.conditions import busy_reason
 from rep.config import level_scale, protein_range_grams
@@ -218,6 +219,23 @@ class App:
         self.save()
 
         return f"Paused until {resume_at.strftime(PAUSE_TIME_FORMAT)}."
+
+    def away(self, day_name, hour_name):
+        today = self.clock().date()
+        day = away_day(day_name, today)
+        hour = None if hour_name == HOME else away_hour(hour_name)
+
+        if day is None or (hour is None and hour_name != HOME):
+            return "ignored: say a day (today, tomorrow, a weekday or YYYY-MM-DD) and an hour (0-23) or home"
+
+        self.state["away_days"] = {**upcoming_away(self.state["away_days"], today), day.isoformat(): hour}
+        self.save()
+        end_hour = end_hour_on(day, self.config["schedule"], self.state["away_days"])
+
+        return f"{day_text(day)}: challenges until {hour_text(end_hour)}."
+
+    def away_plan(self):
+        return "\n".join(away_plan_lines(self.config["schedule"], self.state["away_days"], self.clock().date()))
 
     def rate(self, token, rating, done=None):
         pending = self.matching_pending(token, STAGE_RATE)

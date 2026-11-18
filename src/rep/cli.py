@@ -33,7 +33,7 @@ TERMINALS = ("kitty", "foot", "alacritty", "wezterm", "gnome-terminal", "konsole
 EXIT_PROBLEM = 1
 
 
-SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "pause", "session", "summary", "dismiss", "test", "today",
+SYNCED_COMMANDS = ("tick", "now", "answer", "rate", "pause", "away", "session", "summary", "dismiss", "test", "today",
                    "stats", "routine", "export", "import", "sync-upload")
 
 
@@ -74,6 +74,9 @@ def forwarded_arguments(arguments):
 
     if command == "pause":
         return [command, str(arguments.minutes)]
+
+    if command == "away" and arguments.day:
+        return [command, arguments.day, arguments.hour]
 
     return [command]
 
@@ -238,6 +241,9 @@ def parser():
     rate.add_argument("done", type=int, nargs="?", help="reps (or seconds) you actually did")
     pause = commands.add_parser("pause", help="no challenges for a while (0 resumes)")
     pause.add_argument("minutes", type=int, nargs="?", default=MEETING_PAUSE_MINUTES)
+    away = commands.add_parser("away", help="out on a day: challenges stop at an hour (no arguments lists them)")
+    away.add_argument("day", nargs="?", help="today, tomorrow, a weekday or YYYY-MM-DD")
+    away.add_argument("hour", nargs="?", help="challenges stop at this hour (0-23), or home to undo")
     session = commands.add_parser("session", help="log a training session today")
     setattr(session.add_argument("kind"), COMPLETION_COMMAND, ("routine", "--names"))
     routine = commands.add_parser("routine", help="your training days and the muscles each one trains")
@@ -298,6 +304,9 @@ def dispatch(paths, arguments):
         print(build_app(paths).log_session(arguments.kind))
     elif command == "pause":
         print(build_app(paths).pause(arguments.minutes))
+    elif command == "away":
+        app = build_app(paths)
+        print(app.away(arguments.day, arguments.hour) if arguments.day else app.away_plan())
     elif command == "test":
         run_test(build_app(paths))
     elif command == "test-window":
@@ -323,7 +332,11 @@ def dispatch(paths, arguments):
 
 
 def main(argv=None):
-    arguments = parser().parse_args(argv)
+    command_parser = parser()
+    arguments = command_parser.parse_args(argv)
+
+    if arguments.command == "away" and bool(arguments.day) != bool(arguments.hour):
+        command_parser.error("away takes a day and an hour, or nothing")
 
     try:
         dispatch(default_paths(), arguments)

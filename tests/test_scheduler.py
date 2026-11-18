@@ -9,6 +9,7 @@ from tests.helpers import FIXED_NOW, config_with, default_pack, event_at, fresh_
 
 NO_NUDGES = {"protein": "off", "bedtime": "off", "summary": "off"}
 MINUTES_BEFORE_REMINDER = 5
+AWAY_HOUR = 14
 
 
 class UnreadableHistory:
@@ -57,6 +58,13 @@ class SchedulerTests(unittest.TestCase):
         night = FIXED_NOW.replace(hour=self.config["schedule"]["end_hour"])
 
         self.assertIsNone(self.decide(now=night))
+
+    def test_on_an_away_day_challenges_stop_at_the_away_hour(self):
+        self.state["next_due"] = 1
+        self.config["schedule"]["away"] = {FIXED_NOW.strftime("%A").lower(): AWAY_HOUR}
+
+        self.assertEqual(self.decide(now=FIXED_NOW.replace(hour=AWAY_HOUR - 1)).action, ACTION_CHALLENGE)
+        self.assertIsNone(self.decide(now=FIXED_NOW.replace(hour=AWAY_HOUR)))
 
     def test_nudges_and_the_summary_fire_once_a_day_at_their_time(self):
         self.config["nudges"] = {"protein": "20:00", "bedtime": "off", "summary": "21:00"}
